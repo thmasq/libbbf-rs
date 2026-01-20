@@ -1,0 +1,10 @@
+[package]
+name = "libbbf"
+version = "0.1.0"
+edition = "2024"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+thiserror = "2.0.18"
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+zerocopy = { version = "0.8.33", features = ["derive"] }

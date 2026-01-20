@@ -59,24 +59,24 @@ impl<R: Read + Seek> BBFReader<R> {
         }
 
         let str_pool_len = footer.asset_table_offset - footer.string_pool_offset;
-        reader.seek(SeekFrom::Start(footer.string_pool_offset))?;
-        let mut string_pool = vec![0u8; str_pool_len as usize];
+        reader.seek(SeekFrom::Start(footer.string_pool_offset.get()))?;
+        let mut string_pool = vec![0u8; str_pool_len.get() as usize];
         reader.read_exact(&mut string_pool)?;
 
-        reader.seek(SeekFrom::Start(footer.asset_table_offset))?;
-        let mut assets = vec![BBFAssetEntry::new_zeroed(); footer.asset_count as usize];
+        reader.seek(SeekFrom::Start(footer.asset_table_offset.get()))?;
+        let mut assets = vec![BBFAssetEntry::new_zeroed(); footer.asset_count.get() as usize];
         reader.read_exact(assets.as_mut_slice().as_mut_bytes())?;
 
-        reader.seek(SeekFrom::Start(footer.page_table_offset))?;
-        let mut pages = vec![BBFPageEntry::new_zeroed(); footer.page_count as usize];
+        reader.seek(SeekFrom::Start(footer.page_table_offset.get()))?;
+        let mut pages = vec![BBFPageEntry::new_zeroed(); footer.page_count.get() as usize];
         reader.read_exact(pages.as_mut_slice().as_mut_bytes())?;
 
-        reader.seek(SeekFrom::Start(footer.section_table_offset))?;
-        let mut sections = vec![BBFSection::new_zeroed(); footer.section_count as usize];
+        reader.seek(SeekFrom::Start(footer.section_table_offset.get()))?;
+        let mut sections = vec![BBFSection::new_zeroed(); footer.section_count.get() as usize];
         reader.read_exact(sections.as_mut_slice().as_mut_bytes())?;
 
-        reader.seek(SeekFrom::Start(footer.meta_table_offset))?;
-        let mut metadata = vec![BBFMetadata::new_zeroed(); footer.key_count as usize];
+        reader.seek(SeekFrom::Start(footer.meta_table_offset.get()))?;
+        let mut metadata = vec![BBFMetadata::new_zeroed(); footer.key_count.get() as usize];
         reader.read_exact(metadata.as_mut_slice().as_mut_bytes())?;
 
         Ok(Self {
@@ -107,8 +107,8 @@ impl<R: Read + Seek> BBFReader<R> {
         }
         let asset = &self.assets[asset_index as usize];
 
-        let mut buffer = vec![0u8; asset.length as usize];
-        self.reader.seek(SeekFrom::Start(asset.offset))?;
+        let mut buffer = vec![0u8; asset.length.get() as usize];
+        self.reader.seek(SeekFrom::Start(asset.offset.get()))?;
         self.reader.read_exact(&mut buffer)?;
 
         Ok(buffer)

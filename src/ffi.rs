@@ -89,5 +89,5 @@ pub extern "C" fn bbf_reader_free(reader: *mut CBbfReader) {
 #[unsafe(no_mangle)]
 pub extern "C" fn bbf_reader_get_page_count(reader: *mut CBbfReader) -> u32 {
     let reader = unsafe { &(*reader).0 };
-    reader.footer.page_count
+    reader.footer.page_count.get()
 }

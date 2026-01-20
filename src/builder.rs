@@ -24,13 +24,13 @@ impl<W: Write + Seek> BBFBuilder<W> {
         let header = BBFHeader {
             magic: *b"BBF1",
             version: 2,
-            flags: 0,
-            header_len: std::mem::size_of::<BBFHeader>() as u16,
-            reserved: 0,
+            flags: 0.into(),
+            header_len: (std::mem::size_of::<BBFHeader>() as u16).into(),
+            reserved: 0.into(),
         };
 
         writer.write_all(header.as_bytes())?;
-        let current_offset = header.header_len as u64;
+        let current_offset = std::mem::size_of::<BBFHeader>() as u64;
 
         Ok(Self {
             writer,
@@ -71,14 +71,14 @@ impl<W: Write + Seek> BBFBuilder<W> {
             self.current_offset += length;
 
             let entry = BBFAssetEntry {
-                offset,
-                length,
-                decoded_length: length,
-                xxh3_hash: hash,
+                offset: offset.into(),
+                length: length.into(),
+                decoded_length: length.into(),
+                xxh3_hash: hash.into(),
                 type_: media_type as u8,
                 flags: 0,
                 padding: [0; 6],
-                reserved: [0; 3],
+                reserved: [0.into(); 3],
             };
 
             asset_index = self.assets.len() as u32;
@@ -87,8 +87,8 @@ impl<W: Write + Seek> BBFBuilder<W> {
         }
 
         self.pages.push(BBFPageEntry {
-            asset_index,
-            flags: 0,
+            asset_index: asset_index.into(),
+            flags: 0.into(),
         });
 
         Ok(asset_index)
@@ -108,17 +108,17 @@ impl<W: Write + Seek> BBFBuilder<W> {
 
     pub fn add_section(&mut self, title: &str, start_page: u32, parent_idx: Option<u32>) {
         let section = BBFSection {
-            section_title_offset: self.get_or_add_str(title),
-            section_start_index: start_page,
-            parent_section_index: parent_idx.unwrap_or(0xFFFFFFFF),
+            section_title_offset: self.get_or_add_str(title).into(),
+            section_start_index: start_page.into(),
+            parent_section_index: parent_idx.unwrap_or(0xFFFFFFFF).into(),
         };
         self.sections.push(section);
     }
 
     pub fn add_metadata(&mut self, key: &str, value: &str) {
         let meta = BBFMetadata {
-            key_offset: self.get_or_add_str(key),
-            val_offset: self.get_or_add_str(value),
+            key_offset: self.get_or_add_str(key).into(),
+            val_offset: self.get_or_add_str(value).into(),
         };
         self.metadata.push(meta);
     }
@@ -148,34 +148,34 @@ impl<W: Write + Seek> BBFBuilder<W> {
             };
         }
 
-        footer.string_pool_offset = current_offset;
+        footer.string_pool_offset = current_offset.into();
         write_hash!(&string_pool);
 
-        footer.asset_table_offset = current_offset;
-        footer.asset_count = assets.len() as u32;
+        footer.asset_table_offset = current_offset.into();
+        footer.asset_count = (assets.len() as u32).into();
         for asset in &assets {
             write_hash!(asset.as_bytes());
         }
 
-        footer.page_table_offset = current_offset;
-        footer.page_count = pages.len() as u32;
+        footer.page_table_offset = current_offset.into();
+        footer.page_count = (pages.len() as u32).into();
         for page in &pages {
             write_hash!(page.as_bytes());
         }
 
-        footer.section_table_offset = current_offset;
-        footer.section_count = sections.len() as u32;
+        footer.section_table_offset = current_offset.into();
+        footer.section_count = (sections.len() as u32).into();
         for section in &sections {
             write_hash!(section.as_bytes());
         }
 
-        footer.meta_table_offset = current_offset;
-        footer.key_count = metadata.len() as u32;
+        footer.meta_table_offset = current_offset.into();
+        footer.key_count = (metadata.len() as u32).into();
         for meta in &metadata {
             write_hash!(meta.as_bytes());
         }
 
-        footer.index_hash = hasher.digest();
+        footer.index_hash = hasher.digest().into();
         footer.magic = *b"BBF1";
 
         writer.write_all(footer.as_bytes())?;

@@ -2,6 +2,8 @@
 
 use std::ffi::CStr;
 use std::fs::File;
+#[cfg(target_arch = "wasm32")]
+use std::io::Read;
 use std::os::raw::c_char;
 use std::panic;
 use std::ptr;
@@ -116,6 +118,8 @@ pub extern "C" fn bbf_reader_open(path: *const c_char) -> *mut CBbfReader {
 
         #[cfg(target_arch = "wasm32")]
         {
+            let mut file = file;
+
             let mut buffer = Vec::new();
             if file.read_to_end(&mut buffer).is_err() {
                 return ptr::null_mut();

@@ -12,7 +12,7 @@ pub enum BBFError {
     InvalidMagic,
     #[error("File too short or corrupted header")]
     FileTooShort,
-    #[error("Table error")]
+    #[error("Table error or invalid offsets")]
     TableError,
 }
 
@@ -41,13 +41,14 @@ impl<R: Read + Seek> BBFReader<R> {
             return Err(BBFError::InvalidMagic);
         }
 
-        let footer_size = size_of::<BBFFooter>() as i64;
+        let footer_size = size_of::<BBFFooter>() as u64;
         let file_len = reader.seek(SeekFrom::End(0))?;
-        if file_len < (size_of::<BBFHeader>() as u64 + footer_size as u64) {
+
+        if file_len < (size_of::<BBFHeader>() as u64 + footer_size) {
             return Err(BBFError::FileTooShort);
         }
 
-        reader.seek(SeekFrom::End(-footer_size))?;
+        reader.seek(SeekFrom::End(-(footer_size as i64)))?;
         let mut footer_buf = [0u8; size_of::<BBFFooter>()];
         reader.read_exact(&mut footer_buf)?;
 
@@ -58,23 +59,67 @@ impl<R: Read + Seek> BBFReader<R> {
             return Err(BBFError::InvalidMagic);
         }
 
-        let str_pool_len = footer.asset_table_offset - footer.string_pool_offset;
-        reader.seek(SeekFrom::Start(footer.string_pool_offset.get()))?;
-        let mut string_pool = vec![0u8; str_pool_len.get() as usize];
+        let validate_table_layout =
+            |offset: u64, count: u32, elem_size: usize| -> Result<(), BBFError> {
+                let total_bytes = (count as u64)
+                    .checked_mul(elem_size as u64)
+                    .ok_or(BBFError::TableError)?;
+
+                let end_offset = offset
+                    .checked_add(total_bytes)
+                    .ok_or(BBFError::TableError)?;
+
+                if end_offset > file_len {
+                    return Err(BBFError::FileTooShort);
+                }
+                Ok(())
+            };
+
+        let str_pool_start = footer.string_pool_offset.get();
+        let str_pool_end = footer.asset_table_offset.get();
+
+        if str_pool_start > str_pool_end || str_pool_end > file_len {
+            return Err(BBFError::TableError);
+        }
+
+        let str_pool_len = str_pool_end - str_pool_start;
+
+        reader.seek(SeekFrom::Start(str_pool_start))?;
+        let mut string_pool = vec![0u8; str_pool_len as usize];
         reader.read_exact(&mut string_pool)?;
 
+        validate_table_layout(
+            footer.asset_table_offset.get(),
+            footer.asset_count.get(),
+            size_of::<BBFAssetEntry>(),
+        )?;
         reader.seek(SeekFrom::Start(footer.asset_table_offset.get()))?;
         let mut assets = vec![BBFAssetEntry::new_zeroed(); footer.asset_count.get() as usize];
         reader.read_exact(assets.as_mut_slice().as_mut_bytes())?;
 
+        validate_table_layout(
+            footer.page_table_offset.get(),
+            footer.page_count.get(),
+            size_of::<BBFPageEntry>(),
+        )?;
         reader.seek(SeekFrom::Start(footer.page_table_offset.get()))?;
         let mut pages = vec![BBFPageEntry::new_zeroed(); footer.page_count.get() as usize];
         reader.read_exact(pages.as_mut_slice().as_mut_bytes())?;
 
+        validate_table_layout(
+            footer.section_table_offset.get(),
+            footer.section_count.get(),
+            size_of::<BBFSection>(),
+        )?;
         reader.seek(SeekFrom::Start(footer.section_table_offset.get()))?;
         let mut sections = vec![BBFSection::new_zeroed(); footer.section_count.get() as usize];
         reader.read_exact(sections.as_mut_slice().as_mut_bytes())?;
 
+        validate_table_layout(
+            footer.meta_table_offset.get(),
+            footer.key_count.get(),
+            size_of::<BBFMetadata>(),
+        )?;
         reader.seek(SeekFrom::Start(footer.meta_table_offset.get()))?;
         let mut metadata = vec![BBFMetadata::new_zeroed(); footer.key_count.get() as usize];
         reader.read_exact(metadata.as_mut_slice().as_mut_bytes())?;
@@ -106,9 +151,18 @@ impl<R: Read + Seek> BBFReader<R> {
             return Err(BBFError::TableError);
         }
         let asset = &self.assets[asset_index as usize];
+        let length = asset.length.get();
+        let offset = asset.offset.get();
 
-        let mut buffer = vec![0u8; asset.length.get() as usize];
-        self.reader.seek(SeekFrom::Start(asset.offset.get()))?;
+        let file_len = self.reader.seek(SeekFrom::End(0))?;
+        let end_of_asset = offset.checked_add(length).ok_or(BBFError::TableError)?;
+
+        if end_of_asset > file_len {
+            return Err(BBFError::FileTooShort);
+        }
+
+        let mut buffer = vec![0u8; length as usize];
+        self.reader.seek(SeekFrom::Start(offset))?;
         self.reader.read_exact(&mut buffer)?;
 
         Ok(buffer)

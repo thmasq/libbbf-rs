@@ -165,87 +165,125 @@ pub fn Builder() -> impl IntoView {
     };
 
     view! {
-        <div class="p-4">
-            <h2 class="text-xl font-bold mb-4">"BBF Builder Mode"</h2>
+        <div class="p-6 h-full overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-6 text-indigo-400">"BBF Builder Mode"</h2>
 
-            <div class="mb-4">
-                <label class="block mb-2">"Add Files:"</label>
-                <input type="file" multiple on:change=handle_files class="border p-2" />
+            <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-xl mb-6">
+                <div class="mb-4">
+                    <label class="block mb-2 text-sm font-medium text-slate-300">"Add Files"</label>
+                    <input
+                        type="file"
+                        multiple
+                        on:change=handle_files
+                        class="block w-full text-sm text-slate-400
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-full file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-indigo-900 file:text-indigo-300
+                            hover:file:bg-indigo-800
+                            cursor-pointer" 
+                    />
+                </div>
+
+                <div class="flex gap-4 mb-4">
+                    <button
+                        on:click=add_section
+                        class="bg-slate-800 border border-slate-600 hover:bg-slate-700 text-indigo-300 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                        <span>"Add Section Marker"</span>
+                    </button>
+                    <button
+                        on:click=add_meta
+                        class="bg-slate-800 border border-slate-600 hover:bg-slate-700 text-emerald-400 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                        <span>"Add Metadata"</span>
+                    </button>
+                </div>
             </div>
 
-            <div class="mb-4">
-                <button on:click=add_section class="bg-blue-500 text-white px-4 py-2 rounded mr-2">"Add Section Marker"</button>
-                <button on:click=add_meta class="bg-green-500 text-white px-4 py-2 rounded">"Add Metadata"</button>
-            </div>
-
-            <div class="flex gap-4">
-                <div class="w-1/2 border p-2">
-                    <h3 class="font-bold mb-2">"Content Order"</h3>
-                    <div class="space-y-1">
+            <div class="flex flex-col md:flex-row gap-6">
+                <div class="w-full md:w-1/2 bg-slate-900 border border-slate-700 rounded-xl p-4 shadow-xl">
+                    <h3 class="font-bold mb-4 text-slate-200 border-b border-slate-700 pb-2">"Content Order"</h3>
+                    <div class="space-y-2 max-h-[500px] overflow-y-auto pr-2">
                         <For
                             each=move || entries.get()
                             key=|e| e.id()
                             children=move |e| {
                                 match e {
                                     BuilderEntry::File { file, .. } => view! {
-                                        <div class="p-2 bg-gray-100 rounded flex items-center">
-                                            <span class="mr-2">"📄"</span>
+                                        <div class="p-3 bg-slate-800 rounded-lg border border-slate-700 flex items-center text-slate-300">
+                                            <span class="mr-3 text-lg opacity-70">"📄"</span>
                                             {file.name()}
                                         </div>
                                     },
                                     BuilderEntry::Section { name, .. } => view! {
-                                        <div class="p-2 bg-yellow-100 font-bold rounded flex items-center">
-                                            <span class="mr-2">"🔖"</span>
+                                        <div class="p-3 bg-indigo-950/50 border border-indigo-900/50 rounded-lg flex items-center text-indigo-200 font-medium">
+                                            <span class="mr-3 text-lg">"🔖"</span>
                                             {format!("Section: {}", name)}
                                         </div>
                                     },
                                 }
                             }
                         />
+                         <Show when=move || entries.get().is_empty()>
+                            <div class="text-slate-500 text-center py-8 italic">"No files added yet."</div>
+                         </Show>
                     </div>
                 </div>
-                <div class="w-1/2 border p-2">
-                    <h3 class="font-bold mb-2">"Metadata"</h3>
-                     <For
-                        each=move || metadata.get()
-                        key=|m| m.id
-                        children=move |m| {
-                            view! {
-                                <div class="p-1 border-b flex gap-2">
-                                    <input class="border p-1 w-1/3" placeholder="Key"
-                                           prop:value=m.key
-                                           on:input=move |ev| {
-                                               let val = event_target_value(&ev);
-                                               set_metadata.update(|list| {
-                                                   if let Some(item) = list.iter_mut().find(|i| i.id == m.id) {
-                                                       item.key = val;
-                                                   }
-                                               });
-                                           }
-                                    />
-                                    <input class="border p-1 w-2/3" placeholder="Value"
-                                           prop:value=m.value
-                                           on:input=move |ev| {
-                                               let val = event_target_value(&ev);
-                                               set_metadata.update(|list| {
-                                                   if let Some(item) = list.iter_mut().find(|i| i.id == m.id) {
-                                                       item.value = val;
-                                                   }
-                                               });
-                                           }
-                                    />
-                                </div>
+
+                <div class="w-full md:w-1/2 bg-slate-900 border border-slate-700 rounded-xl p-4 shadow-xl">
+                    <h3 class="font-bold mb-4 text-slate-200 border-b border-slate-700 pb-2">"Metadata"</h3>
+                     <div class="space-y-2">
+                         <For
+                            each=move || metadata.get()
+                            key=|m| m.id
+                            children=move |m| {
+                                view! {
+                                    <div class="flex gap-2">
+                                        <input class="bg-slate-800 border border-slate-600 rounded p-2 w-1/3 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                               placeholder="Key"
+                                               prop:value=m.key
+                                               on:input=move |ev| {
+                                                   let val = event_target_value(&ev);
+                                                   set_metadata.update(|list| {
+                                                       if let Some(item) = list.iter_mut().find(|i| i.id == m.id) {
+                                                           item.key = val;
+                                                       }
+                                                   });
+                                               }
+                                        />
+                                        <input class="bg-slate-800 border border-slate-600 rounded p-2 w-2/3 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                               placeholder="Value"
+                                               prop:value=m.value
+                                               on:input=move |ev| {
+                                                   let val = event_target_value(&ev);
+                                                   set_metadata.update(|list| {
+                                                       if let Some(item) = list.iter_mut().find(|i| i.id == m.id) {
+                                                           item.value = val;
+                                                       }
+                                                   });
+                                               }
+                                        />
+                                    </div>
+                                }
                             }
-                        }
-                    />
+                        />
+                        <Show when=move || metadata.get().is_empty()>
+                            <div class="text-slate-500 text-center py-8 italic">"No metadata."</div>
+                         </Show>
+                    </div>
                 </div>
             </div>
 
-            <button on:click=compile class="mt-4 bg-red-600 text-white px-6 py-2 rounded text-lg font-bold hover:bg-red-700 transition">
-                "Compile & Download .bbf"
-            </button>
-
-            <div class="mt-2 text-red-500 font-mono">{status}</div>
+            <div class="mt-8 flex items-center justify-between bg-slate-900 border border-slate-700 rounded-xl p-4">
+                <div class="text-indigo-400 font-mono">{status}</div>
+                <button
+                    on:click=compile
+                    class="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-lg text-lg font-bold shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_30px_rgba(79,70,229,0.6)] transition-all transform hover:-translate-y-0.5"
+                >
+                    "Compile & Download .bbf"
+                </button>
+            </div>
         </div>
     }
 }

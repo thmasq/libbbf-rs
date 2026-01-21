@@ -136,21 +136,37 @@ pub fn Reader() -> impl IntoView {
     };
 
     view! {
-        <div class="p-4 h-full flex flex-col">
-            <h2 class="text-xl font-bold mb-2">"BBF Reader"</h2>
-            <div class="mb-4 flex gap-4 items-center">
-                <input type="file" accept=".bbf" on:change=handle_file class="border p-1" />
-                <span class="text-blue-600">{status}</span>
+        <div class="h-full flex flex-col">
+            <div class="bg-slate-900 border-b border-slate-700 p-4 flex gap-4 items-center shadow-md z-10">
+                 <label class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-md text-sm font-medium">
+                    "Open .bbf"
+                    <input type="file" accept=".bbf" on:change=handle_file class="hidden" />
+                </label>
+
+                <span class="text-indigo-300 font-mono text-sm border-l border-slate-700 pl-4">{status}</span>
+
+                <div class="flex-1"></div>
+
                 <Show when=move || book.get().is_some()>
-                     <button on:click=verify_integrity class="bg-yellow-500 text-white px-3 py-1 rounded">"Verify Integrity"</button>
+                     <button
+                        on:click=verify_integrity
+                        class="bg-slate-800 border border-amber-500/30 text-amber-500 hover:bg-amber-900/20 px-3 py-1 rounded text-sm transition-colors"
+                    >
+                        "Verify Integrity"
+                    </button>
                 </Show>
             </div>
 
-            <Show when=move || book.get().is_some() fallback=|| view! { <div>"Select a BBF file to begin."</div> }>
-                <div class="flex flex-1 overflow-hidden border">
-                    <div class="w-64 bg-gray-50 border-r p-2 overflow-y-auto hidden md:block">
-                        <h3 class="font-bold border-b mb-2">"Sections"</h3>
-                        <ul class="text-sm">
+            <Show when=move || book.get().is_some() fallback=|| view! {
+                <div class="flex flex-col items-center justify-center h-full text-slate-500">
+                    <div class="text-6xl mb-4 opacity-20">"📖"</div>
+                    <div class="text-lg">"Select a BBF file to begin reading."</div>
+                </div>
+            }>
+                <div class="flex flex-1 overflow-hidden">
+                    <div class="w-64 bg-slate-900 border-r border-slate-700 p-0 overflow-y-auto hidden md:block">
+                        <div class="p-4 bg-slate-800 border-b border-slate-700 font-bold text-slate-200 sticky top-0">"Sections"</div>
+                        <ul class="p-2 space-y-1">
                             {move || {
                                 book.get().map(|bk| {
                                     let reader = bk.reader.clone();
@@ -159,18 +175,23 @@ pub fn Reader() -> impl IntoView {
                                     reader.sections().iter().enumerate().map(move |(_, s)| {
                                         let title = reader_for_closure.get_string(s.section_title_offset.get()).unwrap_or("?").to_string();
                                         let page = s.section_start_index.get();
+                                        let is_active = page_idx.get() >= page;
+
+                                        let active_class = if is_active { "text-indigo-400" } else { "text-slate-400" };
+
                                         view! {
-                                            <li class="cursor-pointer hover:text-blue-500 mb-1"
+                                            <li class=format!("cursor-pointer hover:bg-slate-800 rounded px-2 py-1.5 transition-colors {}", active_class)
                                                 on:click=move |_| set_page_idx.set(page)>
-                                                {title} <span class="text-gray-400 text-xs">"(p. " {page + 1} ")"</span>
+                                                <div class="font-medium text-sm">{title}</div>
+                                                <div class="text-xs opacity-50">"Page " {page + 1}</div>
                                             </li>
                                         }
                                     }).collect_view()
                                 })
                             }}
                         </ul>
-                         <h3 class="font-bold border-b mt-4 mb-2">"Metadata"</h3>
-                         <ul class="text-xs text-gray-600">
+                         <div class="p-4 bg-slate-800 border-y border-slate-700 font-bold text-slate-200 mt-4">"Metadata"</div>
+                         <ul class="p-4 space-y-2 text-xs text-slate-400">
                              {move || {
                                 book.get().map(|bk| {
                                     let reader = bk.reader.clone();
@@ -179,27 +200,42 @@ pub fn Reader() -> impl IntoView {
                                     reader.metadata().iter().map(move |m| {
                                         let k = reader_for_closure.get_string(m.key_offset.get()).unwrap_or("?").to_string();
                                         let v = reader_for_closure.get_string(m.val_offset.get()).unwrap_or("?").to_string();
-                                        view! { <li><b>{k}</b> ": " {v}</li> }
+                                        view! {
+                                            <li class="flex flex-col border-b border-slate-800 pb-1 last:border-0">
+                                                <span class="text-indigo-400 font-bold">{k}</span>
+                                                <span class="text-slate-300 break-all">{v}</span>
+                                            </li>
+                                        }
                                     }).collect_view()
                                 })
                             }}
                          </ul>
                     </div>
 
-                    <div class="flex-1 flex flex-col bg-gray-800 relative">
-                        <div class="flex-1 flex items-center justify-center overflow-auto p-4"
+                    <div class="flex-1 flex flex-col bg-black relative">
+                        <div class="flex-1 flex items-center justify-center overflow-auto p-4 cursor-pointer"
                              on:click=move |ev| {
                                  let width = web_sys::window().unwrap().inner_width().unwrap().as_f64().unwrap();
                                  let x = ev.client_x() as f64;
                                  if x > width / 2.0 { next_page_logic(); } else { prev_page_logic(); }
                              }>
-                             <img src=move || img_url.get() class="max-h-full max-w-full shadow-lg object-contain" />
+                             <img src=move || img_url.get() class="max-h-full max-w-full shadow-2xl object-contain" />
                         </div>
 
-                        <div class="bg-black bg-opacity-75 text-white p-2 flex justify-between items-center">
-                             <button on:click=move |_| prev_page_logic() class="px-4 py-1 bg-gray-700 hover:bg-gray-600 rounded">"Previous"</button>
-                             <span>"Page " {move || page_idx.get() + 1}</span>
-                             <button on:click=move |_| next_page_logic() class="px-4 py-1 bg-gray-700 hover:bg-gray-600 rounded">"Next"</button>
+                        <div class="bg-slate-900 border-t border-slate-700 text-slate-200 p-3 flex justify-between items-center z-20">
+                             <button on:click=move |_| prev_page_logic()
+                                class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-sm transition-colors">
+                                "Previous"
+                             </button>
+
+                             <span class="font-mono text-sm text-indigo-300">
+                                "Page " <span class="text-white font-bold">{move || page_idx.get() + 1}</span>
+                             </span>
+
+                             <button on:click=move |_| next_page_logic()
+                                class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-sm transition-colors">
+                                "Next"
+                             </button>
                         </div>
                     </div>
                 </div>

@@ -1,4 +1,4 @@
-name: Release Pipeline
+name: Release & Deploy
 
 on:
   push:
@@ -7,12 +7,16 @@ on:
 
 permissions:
   contents: write
-  packages: write
+  pages: write
+  id-token: write
 
 jobs:
-  publish-webapp:
-    name: Publish WebApp
+  deploy-webapp:
+    name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -28,29 +32,23 @@ jobs:
       - name: Build WASM
         run: wasm-pack build example-webapp --target web --release
 
-      - name: Prepare Package for GitHub Registry
-        working-directory: example-webapp/pkg
+      - name: Prepare Deployment Folder
         run: |
-          # GitHub Packages requires the name to be scoped to the owner (e.g. @username/package)
-          # We use jq to update the package.json name dynamically
-          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          jq --arg name "@$OWNER/example-webapp" '.name = $name' package.json > package.json.tmp && mv package.json.tmp package.json
-          
-          # Ensure a publishConfig is present pointing to GitHub
-          jq --arg registry "https://npm.pkg.github.com" '.publishConfig = { registry: $registry }' package.json > package.json.tmp && mv package.json.tmp package.json
+          mkdir -p public
+          cp example-webapp/index.html public/
+          cp -r example-webapp/pkg public/pkg
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          node-version: '20'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@${{ github.repository_owner }}'
+          path: "public"
 
-      - name: Publish to GitHub Packages
-        working-directory: example-webapp/pkg
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   build-binaries:
     name: Build Binary (${{ matrix.target }})
@@ -98,7 +96,7 @@ jobs:
         if: ${{ !matrix.use_cross }}
         run: cargo build --release --bin bbfmux --target ${{ matrix.target }}
 
-      - name: Rename and Pack Binary
+      - name: Prepare Asset Name
         shell: bash
         run: |
           mkdir -p release-assets

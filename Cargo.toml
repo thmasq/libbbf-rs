@@ -2,5 +2,6 @@
 members = [
     "libbbf",
     "bbfmux",
+    "example-webapp",
 ]
 resolver = "2"

@@ -69,11 +69,24 @@ pub fn Builder() -> impl IntoView {
     let (editing_id, set_editing_id) = signal(Option::<usize>::None);
     let (drag_id, set_drag_id) = signal(Option::<usize>::None);
 
+    let (floating_entry, set_floating_entry) = signal(Option::<BuilderEntry>::None);
+    let (mouse_pos, set_mouse_pos) = signal((0.0, 0.0));
+
     let next_id = RwSignal::new(0_usize);
     let get_id = move || {
         next_id.update(|n| *n += 1);
         next_id.get_untracked()
     };
+
+    let _ = window_event_listener(leptos::ev::mousemove, move |ev| {
+        set_mouse_pos.set((ev.client_x() as f64, ev.client_y() as f64));
+    });
+
+    let _ = window_event_listener(leptos::ev::click, move |_| {
+        if floating_entry.get_untracked().is_some() {
+            set_floating_entry.set(None);
+        }
+    });
 
     let handle_files = move |ev: web_sys::Event| {
         let target: HtmlInputElement = ev.target().unwrap().unchecked_into();
@@ -92,15 +105,15 @@ pub fn Builder() -> impl IntoView {
         }
     };
 
-    let add_section = move |_| {
+    let add_section = move |ev: web_sys::MouseEvent| {
+        ev.stop_propagation();
         let id = get_id();
-        set_entries.update(move |e: &mut Vec<BuilderEntry>| {
-            e.push(BuilderEntry::Section {
-                id,
-                name: RwSignal::new("New Section".to_string()),
-                parent: None,
-            })
-        });
+        let entry = BuilderEntry::Section {
+            id,
+            name: RwSignal::new("New Section".to_string()),
+            parent: None,
+        };
+        set_floating_entry.set(Some(entry));
     };
 
     let add_meta = move |_| {
@@ -136,6 +149,43 @@ pub fn Builder() -> impl IntoView {
             }
         }
         set_drag_id.set(None);
+    };
+
+    let handle_container_click = move |ev: web_sys::MouseEvent| {
+        if let Some(entry) = floating_entry.get() {
+            ev.stop_propagation();
+
+            let target_div = ev
+                .current_target()
+                .and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok())
+                .expect("Handler attached to HtmlElement");
+
+            let children = target_div.children();
+            let len = children.length();
+            let mouse_y = ev.client_y() as f64;
+
+            let mut insert_idx = len as usize;
+
+            for i in 0..len {
+                if let Some(child) = children.item(i) {
+                    let rect = child.get_bounding_client_rect();
+                    let mid = rect.top() + (rect.height() / 2.0);
+                    if mouse_y < mid {
+                        insert_idx = i as usize;
+                        break;
+                    }
+                }
+            }
+
+            set_entries.update(|list| {
+                if insert_idx >= list.len() {
+                    list.push(entry);
+                } else {
+                    list.insert(insert_idx, entry);
+                }
+            });
+            set_floating_entry.set(None);
+        }
     };
 
     let compile = move |_| {
@@ -205,6 +255,16 @@ pub fn Builder() -> impl IntoView {
 
     view! {
         <div class="p-6 h-full overflow-y-auto">
+            <Show when=move || floating_entry.get().is_some()>
+                <div
+                    class="fixed z-50 pointer-events-none p-3 rounded-lg border border-indigo-500 bg-slate-800 shadow-2xl opacity-90 flex items-center gap-3"
+                    style=move || format!("left: {}px; top: {}px; transform: translate(10px, 10px);", mouse_pos.get().0, mouse_pos.get().1)
+                >
+                     <span class="text-xl">"🔖"</span>
+                     <span class="text-slate-300 font-bold">"Place New Section..."</span>
+                </div>
+            </Show>
+
             <h2 class="text-2xl font-bold mb-6 text-indigo-400">"BBF Builder Mode"</h2>
 
             <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-xl mb-6">
@@ -243,7 +303,11 @@ pub fn Builder() -> impl IntoView {
             <div class="flex flex-col md:flex-row gap-6">
                 <div class="w-full md:w-1/2 bg-slate-900 border border-slate-700 rounded-xl p-4 shadow-xl">
                     <h3 class="font-bold mb-4 text-slate-200 border-b border-slate-700 pb-2">"Content Order"</h3>
-                    <div class="space-y-2 max-h-[500px] overflow-y-auto pr-2">
+
+                    <div
+                        class="space-y-2 max-h-[500px] overflow-y-auto pr-2 min-h-[100px]"
+                        on:click=handle_container_click
+                    >
                         <For
                             each=move || entries.get()
                             key=|e| e.id()
@@ -270,6 +334,7 @@ pub fn Builder() -> impl IntoView {
                                             ev.prevent_default();
                                             handle_drop(id);
                                         }
+
                                         on:dblclick=move |_| {
                                             if is_section {
                                                 set_editing_id.set(Some(id));

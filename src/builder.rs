@@ -59,7 +59,12 @@ impl<W: Write + Seek> BBFBuilder<W> {
         Ok(())
     }
 
-    pub fn add_page(&mut self, data: &[u8], media_type: BBFMediaType) -> io::Result<u32> {
+    pub fn add_page(
+        &mut self,
+        data: &[u8],
+        media_type: BBFMediaType,
+        flags: u32,
+    ) -> io::Result<u32> {
         let hash = xxh3_64(data);
         let asset_index;
 
@@ -92,7 +97,7 @@ impl<W: Write + Seek> BBFBuilder<W> {
 
         self.pages.push(BBFPageEntry {
             asset_index: asset_index.into(),
-            flags: 0.into(),
+            flags: flags.into(),
         });
 
         Ok(asset_index)

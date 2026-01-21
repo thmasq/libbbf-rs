@@ -44,6 +44,7 @@ pub extern "C" fn bbf_builder_add_page(
     data: *const u8,
     len: usize,
     media_type: u8,
+    flags: u32,
 ) -> u32 {
     let result = panic::catch_unwind(|| {
         if builder.is_null() || data.is_null() {
@@ -54,7 +55,9 @@ pub extern "C" fn bbf_builder_add_page(
         let slice = unsafe { slice::from_raw_parts(data, len) };
         let mtype = BBFMediaType::from(media_type);
 
-        builder_ref.add_page(slice, mtype).unwrap_or(0xFFFF_FFFF)
+        builder_ref
+            .add_page(slice, mtype, flags)
+            .unwrap_or(0xFFFF_FFFF)
     });
 
     result.unwrap_or(0xFFFF_FFFF)

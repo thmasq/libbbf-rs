@@ -3,8 +3,9 @@ use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 use zerocopy::{U16, U32, U64};
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BBFMediaType {
+    #[default]
     Unknown = 0x00,
     Avif = 0x01,
     Png = 0x02,
@@ -14,12 +15,6 @@ pub enum BBFMediaType {
     Gif = 0x07,
     Tiff = 0x08,
     Jpg = 0x09,
-}
-
-impl Default for BBFMediaType {
-    fn default() -> Self {
-        BBFMediaType::Unknown
-    }
 }
 
 impl From<u8> for BBFMediaType {
@@ -39,6 +34,7 @@ impl From<u8> for BBFMediaType {
 }
 
 impl BBFMediaType {
+    #[must_use]
     pub fn from_extension(ext: &str) -> Self {
         match ext.to_lowercase().as_str() {
             ".png" => Self::Png,
@@ -53,7 +49,8 @@ impl BBFMediaType {
         }
     }
 
-    pub fn as_extension(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_extension(&self) -> &'static str {
         match self {
             Self::Png => ".png",
             Self::Jpg => ".jpg",
@@ -63,7 +60,7 @@ impl BBFMediaType {
             Self::Bmp => ".bmp",
             Self::Gif => ".gif",
             Self::Tiff => ".tiff",
-            _ => ".bin",
+            Self::Unknown => ".bin",
         }
     }
 }

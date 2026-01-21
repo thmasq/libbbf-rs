@@ -1,3 +1,5 @@
+#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use libbbf::{BBFBuilder, BBFMediaType, BBFReader};
@@ -103,6 +105,7 @@ fn main() -> Result<()> {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn cmd_mux(cli: &Cli) -> Result<()> {
     if cli.inputs.is_empty() {
         bail!("Error: No .bbf input specified.");
@@ -175,7 +178,8 @@ fn cmd_mux(cli: &Cli) -> Result<()> {
     let mut file_to_page_idx = HashMap::new();
 
     for (i, p) in manifest.iter().enumerate() {
-        let data = fs::read(&p.path).with_context(|| format!("Failed to read {:?}", p.path))?;
+        let data =
+            fs::read(&p.path).with_context(|| format!("Failed to read {}", p.path.display()))?;
         let ext = p
             .path
             .extension()
@@ -183,7 +187,7 @@ fn cmd_mux(cli: &Cli) -> Result<()> {
             .unwrap_or("")
             .to_string();
 
-        let media_type = BBFMediaType::from_extension(&format!(".{}", ext));
+        let media_type = BBFMediaType::from_extension(&format!(".{ext}"));
 
         builder.add_page(&data, media_type, 0)?;
         file_to_page_idx.insert(p.filename.clone(), i as u32);
@@ -206,10 +210,10 @@ fn cmd_mux(cli: &Cli) -> Result<()> {
             req.target.parse::<u32>().unwrap_or(1).saturating_sub(1)
         };
 
-        let parent_idx = if !req.parent.is_empty() {
-            section_name_to_idx.get(&req.parent).copied()
-        } else {
+        let parent_idx = if req.parent.is_empty() {
             None
+        } else {
+            section_name_to_idx.get(&req.parent).copied()
         };
 
         builder.add_section(&req.name, page_idx, parent_idx);
@@ -232,7 +236,7 @@ fn cmd_mux(cli: &Cli) -> Result<()> {
 fn cmd_info(path: &Path) -> Result<()> {
     let data = fs::read(path).context("Failed to open BBF")?;
     let reader =
-        BBFReader::new(&data).map_err(|e| anyhow::anyhow!("Error: Failed to open BBF. {:?}", e))?;
+        BBFReader::new(&data).map_err(|e| anyhow::anyhow!("Error: Failed to open BBF. {e:?}"))?;
 
     println!("Bound Book Format (.bbf) Info");
     println!("------------------------------");
@@ -268,7 +272,7 @@ fn cmd_info(path: &Path) -> Result<()> {
         for m in metadata {
             let k = reader.get_string(m.key_offset.get()).unwrap_or("?");
             let v = reader.get_string(m.val_offset.get()).unwrap_or("?");
-            println!(" - {:<15}:{}", k, v);
+            println!(" - {k:<15}:{v}");
         }
     }
     println!();
@@ -280,7 +284,7 @@ fn cmd_verify(path: &Path, user_index: Option<i32>) -> Result<()> {
 
     let data = fs::read(path).context("Failed to open BBF")?;
     let reader =
-        BBFReader::new(&data).map_err(|e| anyhow::anyhow!("Error: Failed to open BBF. {:?}", e))?;
+        BBFReader::new(&data).map_err(|e| anyhow::anyhow!("Error: Failed to open BBF. {e:?}"))?;
 
     let meta_start = reader.footer.string_pool_offset.get() as usize;
     let meta_size = data.len() - size_of::<libbbf::format::BBFFooter>() - meta_start;
@@ -317,14 +321,14 @@ fn cmd_verify(path: &Path, user_index: Option<i32>) -> Result<()> {
         let len = asset.length.get() as usize;
 
         if start + len > data.len() {
-            eprintln!(" [!!] Asset {} CORRUPT", idx);
+            eprintln!(" [!!] Asset {idx} CORRUPT");
             return false;
         }
 
         let slice = &data[start..start + len];
         let hash = xxh3_64(slice);
         if hash != asset.xxh3_hash.get() {
-            eprintln!(" [!!] Asset {} CORRUPT", idx);
+            eprintln!(" [!!] Asset {idx} CORRUPT");
             return false;
         }
         true
@@ -360,7 +364,7 @@ fn cmd_extract(
 ) -> Result<()> {
     let data = fs::read(path).context("Failed to open BBF")?;
     let reader =
-        BBFReader::new(&data).map_err(|e| anyhow::anyhow!("Error: Failed to open BBF. {:?}", e))?;
+        BBFReader::new(&data).map_err(|e| anyhow::anyhow!("Error: Failed to open BBF. {e:?}"))?;
 
     fs::create_dir(outdir)?;
 
@@ -383,8 +387,7 @@ fn cmd_extract(
 
                 end_idx = pages.len() as u32;
 
-                for j in (i + 1)..sections.len() {
-                    let next_s = &sections[j];
+                for next_s in sections.iter().skip(i + 1) {
                     let next_title = reader
                         .get_string(next_s.section_title_offset.get())
                         .unwrap_or("");
@@ -394,17 +397,13 @@ fn cmd_extract(
                             end_idx = next_s.section_start_index.get();
                             break;
                         }
-                        if rk.is_empty() {
-                            if next_s.section_start_index.get() > start_idx {
-                                end_idx = next_s.section_start_index.get();
-                                break;
-                            }
-                        }
-                    } else {
-                        if next_s.section_start_index.get() > start_idx {
+                        if rk.is_empty() && next_s.section_start_index.get() > start_idx {
                             end_idx = next_s.section_start_index.get();
                             break;
                         }
+                    } else if next_s.section_start_index.get() > start_idx {
+                        end_idx = next_s.section_start_index.get();
+                        break;
                     }
                 }
                 found = true;
@@ -412,7 +411,7 @@ fn cmd_extract(
             }
         }
         if !found {
-            bail!("Section '{}' not found.", filter);
+            bail!("Section '{filter}' not found.");
         }
     }
 
@@ -463,9 +462,9 @@ fn parse_section_string(s: &str) -> SectionReq {
         parts.push(part);
     }
 
-    let name = trim_quotes(parts.get(0).unwrap_or(&"")).to_string();
-    let target = trim_quotes(parts.get(1).unwrap_or(&"1")).to_string();
-    let parent = trim_quotes(parts.get(2).unwrap_or(&"")).to_string();
+    let name = trim_quotes(parts.first().unwrap_or(&""));
+    let target = trim_quotes(parts.get(1).unwrap_or(&"1"));
+    let parent = trim_quotes(parts.get(2).unwrap_or(&""));
 
     let is_filename = !target.chars().all(char::is_numeric);
 

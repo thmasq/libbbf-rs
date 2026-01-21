@@ -1,0 +1,12 @@
+[package]
+name = "bbfmux"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+clap = { version = "4.5.54", features = ["derive"] }
+libbbf = { path = "../libbbf" }
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+zerocopy = "0.8.33"
+

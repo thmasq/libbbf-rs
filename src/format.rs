@@ -16,6 +16,12 @@ pub enum BBFMediaType {
     Jpg = 0x09,
 }
 
+impl Default for BBFMediaType {
+    fn default() -> Self {
+        BBFMediaType::Unknown
+    }
+}
+
 impl From<u8> for BBFMediaType {
     fn from(v: u8) -> Self {
         match v {
@@ -28,6 +34,36 @@ impl From<u8> for BBFMediaType {
             0x08 => Self::Tiff,
             0x09 => Self::Jpg,
             _ => Self::Unknown,
+        }
+    }
+}
+
+impl BBFMediaType {
+    pub fn from_extension(ext: &str) -> Self {
+        match ext.to_lowercase().as_str() {
+            ".png" => Self::Png,
+            ".jpg" | ".jpeg" => Self::Jpg,
+            ".avif" => Self::Avif,
+            ".webp" => Self::Webp,
+            ".jxl" => Self::Jxl,
+            ".bmp" => Self::Bmp,
+            ".gif" => Self::Gif,
+            ".tiff" => Self::Tiff,
+            _ => Self::Unknown,
+        }
+    }
+
+    pub fn as_extension(&self) -> &'static str {
+        match self {
+            Self::Png => ".png",
+            Self::Jpg => ".jpg",
+            Self::Avif => ".avif",
+            Self::Webp => ".webp",
+            Self::Jxl => ".jxl",
+            Self::Bmp => ".bmp",
+            Self::Gif => ".gif",
+            Self::Tiff => ".tiff",
+            _ => ".bin",
         }
     }
 }

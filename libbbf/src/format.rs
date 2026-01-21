@@ -112,6 +112,16 @@ pub struct BBFMetadata {
 
 #[repr(C, packed)]
 #[derive(IntoBytes, FromBytes, Immutable, KnownLayout, Unaligned, Debug, Clone, Copy)]
+pub struct BBFExpansionHeader {
+    pub extension_type: U32<LittleEndian>,
+    pub padding: U32<LittleEndian>,
+    pub offset: U64<LittleEndian>,
+    pub flags: U64<LittleEndian>,
+    pub length: U64<LittleEndian>,
+}
+
+#[repr(C, packed)]
+#[derive(IntoBytes, FromBytes, Immutable, KnownLayout, Unaligned, Debug, Clone, Copy)]
 pub struct BBFFooter {
     pub string_pool_offset: U64<LittleEndian>,
     pub asset_table_offset: U64<LittleEndian>,

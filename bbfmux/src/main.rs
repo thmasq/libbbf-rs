@@ -3,6 +3,8 @@
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use libbbf::{BBFBuilder, BBFMediaType, BBFReader};
+use memmap2::Mmap;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -178,8 +180,11 @@ fn cmd_mux(cli: &Cli) -> Result<()> {
     let mut file_to_page_idx = HashMap::new();
 
     for (i, p) in manifest.iter().enumerate() {
-        let data =
-            fs::read(&p.path).with_context(|| format!("Failed to read {}", p.path.display()))?;
+        let input_file =
+            File::open(&p.path).with_context(|| format!("Failed to open {}", p.path.display()))?;
+
+        let file_len = input_file.metadata()?.len();
+
         let ext = p
             .path
             .extension()
@@ -189,7 +194,13 @@ fn cmd_mux(cli: &Cli) -> Result<()> {
 
         let media_type = BBFMediaType::from_extension(&format!(".{ext}"));
 
-        builder.add_page(&data, media_type, 0)?;
+        if file_len == 0 {
+            builder.add_page(&[], media_type, 0)?;
+        } else {
+            let mmap = unsafe { Mmap::map(&input_file)? };
+            builder.add_page(&mmap, media_type, 0)?;
+        }
+
         file_to_page_idx.insert(p.filename.clone(), i as u32);
     }
 
@@ -234,9 +245,11 @@ fn cmd_mux(cli: &Cli) -> Result<()> {
 }
 
 fn cmd_info(path: &Path) -> Result<()> {
-    let data = fs::read(path).context("Failed to open BBF")?;
-    let reader =
-        BBFReader::new(&data).map_err(|e| anyhow::anyhow!("Error: Failed to open BBF. {e:?}"))?;
+    let file = File::open(path).context("Failed to open BBF")?;
+    let mmap = unsafe { Mmap::map(&file).context("Failed to mmap BBF")? };
+
+    let reader = BBFReader::new(&mmap[..])
+        .map_err(|e| anyhow::anyhow!("Error: Failed to parse BBF. {e:?}"))?;
 
     println!("Bound Book Format (.bbf) Info");
     println!("------------------------------");
@@ -282,9 +295,13 @@ fn cmd_info(path: &Path) -> Result<()> {
 fn cmd_verify(path: &Path, user_index: Option<i32>) -> Result<()> {
     let target_index = user_index.unwrap_or(-2);
 
-    let data = fs::read(path).context("Failed to open BBF")?;
-    let reader =
-        BBFReader::new(&data).map_err(|e| anyhow::anyhow!("Error: Failed to open BBF. {e:?}"))?;
+    let file = File::open(path).context("Failed to open BBF")?;
+    let mmap = unsafe { Mmap::map(&file).context("Failed to mmap BBF")? };
+
+    let reader = BBFReader::new(&mmap[..])
+        .map_err(|e| anyhow::anyhow!("Error: Failed to parse BBF. {e:?}"))?;
+
+    let data = &mmap[..];
 
     let meta_start = reader.footer.string_pool_offset.get() as usize;
     let meta_size = data.len() - size_of::<libbbf::format::BBFFooter>() - meta_start;
@@ -321,7 +338,7 @@ fn cmd_verify(path: &Path, user_index: Option<i32>) -> Result<()> {
         let len = asset.length.get() as usize;
 
         if start + len > data.len() {
-            eprintln!(" [!!] Asset {idx} CORRUPT");
+            eprintln!(" [!!] Asset {idx} CORRUPT (Out of bounds)");
             return false;
         }
 
@@ -334,21 +351,16 @@ fn cmd_verify(path: &Path, user_index: Option<i32>) -> Result<()> {
         true
     };
 
-    let mut all_assets_ok = dir_ok;
-
-    if target_index >= 0 {
-        if !check_asset(target_index as usize) {
-            all_assets_ok = false;
-        }
+    let all_assets_ok = if target_index >= 0 {
+        check_asset(target_index as usize)
     } else {
-        for i in 0..assets.len() {
-            if !check_asset(i) {
-                all_assets_ok = false;
-            }
-        }
-    }
+        (0..assets.len())
+            .into_par_iter()
+            .map(check_asset)
+            .reduce(|| true, |a, b| a && b)
+    };
 
-    if all_assets_ok {
+    if all_assets_ok && dir_ok {
         println!("All integrity checks passed.");
         Ok(())
     } else {
@@ -362,11 +374,13 @@ fn cmd_extract(
     section_filter: Option<&str>,
     range_key: Option<&str>,
 ) -> Result<()> {
-    let data = fs::read(path).context("Failed to open BBF")?;
-    let reader =
-        BBFReader::new(&data).map_err(|e| anyhow::anyhow!("Error: Failed to open BBF. {e:?}"))?;
+    let file = File::open(path).context("Failed to open BBF")?;
+    let mmap = unsafe { Mmap::map(&file).context("Failed to mmap BBF")? };
 
-    fs::create_dir(outdir)?;
+    let reader = BBFReader::new(&mmap[..])
+        .map_err(|e| anyhow::anyhow!("Error: Failed to parse BBF. {e:?}"))?;
+
+    fs::create_dir_all(outdir)?;
 
     let pages = reader.pages();
     let sections = reader.sections();
@@ -422,6 +436,8 @@ fn cmd_extract(
         end_idx
     );
 
+    let data = &mmap[..];
+
     for i in start_idx..end_idx {
         if i as usize >= pages.len() {
             break;
@@ -437,6 +453,11 @@ fn cmd_extract(
 
         let file_offset = asset.offset.get() as usize;
         let file_len = asset.length.get() as usize;
+
+        if file_offset + file_len > data.len() {
+            eprintln!("Warning: Page {i} out of bounds, skipping.");
+            continue;
+        }
 
         let mut f = File::create(out_path)?;
         f.write_all(&data[file_offset..file_offset + file_len])?;

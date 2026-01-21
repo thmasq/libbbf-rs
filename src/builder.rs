@@ -1,9 +1,13 @@
+#![allow(clippy::cast_possible_truncation, clippy::missing_errors_doc)]
+
 use std::collections::HashMap;
 use std::io::{self, Seek, Write};
 use xxhash_rust::xxh3::{Xxh3, xxh3_64};
 use zerocopy::{FromZeros, IntoBytes};
 
-use crate::format::*;
+use crate::format::{
+    BBFAssetEntry, BBFFooter, BBFHeader, BBFMediaType, BBFMetadata, BBFPageEntry, BBFSection,
+};
 
 pub struct BBFBuilder<W: Write + Seek> {
     writer: W,
@@ -110,7 +114,7 @@ impl<W: Write + Seek> BBFBuilder<W> {
         let section = BBFSection {
             section_title_offset: self.get_or_add_str(title).into(),
             section_start_index: start_page.into(),
-            parent_section_index: parent_idx.unwrap_or(0xFFFFFFFF).into(),
+            parent_section_index: parent_idx.unwrap_or(0xFFFF_FFFF).into(),
         };
         self.sections.push(section);
     }
@@ -124,7 +128,7 @@ impl<W: Write + Seek> BBFBuilder<W> {
     }
 
     pub fn finalize(self) -> io::Result<()> {
-        let BBFBuilder {
+        let Self {
             mut writer,
             mut current_offset,
             assets,

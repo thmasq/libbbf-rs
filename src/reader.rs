@@ -1,8 +1,14 @@
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::missing_errors_doc,
+    clippy::cast_possible_wrap
+)]
+
 use std::io::{self, Read, Seek, SeekFrom};
 use std::mem::size_of;
 use zerocopy::{FromBytes, FromZeros, IntoBytes};
 
-use crate::format::*;
+use crate::format::{BBFAssetEntry, BBFFooter, BBFHeader, BBFMetadata, BBFPageEntry, BBFSection};
 
 #[derive(Debug, thiserror::Error)]
 pub enum BBFError {
@@ -61,7 +67,7 @@ impl<R: Read + Seek> BBFReader<R> {
 
         let validate_table_layout =
             |offset: u64, count: u32, elem_size: usize| -> Result<(), BBFError> {
-                let total_bytes = (count as u64)
+                let total_bytes = u64::from(count)
                     .checked_mul(elem_size as u64)
                     .ok_or(BBFError::TableError)?;
 

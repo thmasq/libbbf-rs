@@ -1,3 +1,5 @@
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
 use std::ffi::CStr;
 use std::fs::File;
 use std::os::raw::c_char;
@@ -20,20 +22,17 @@ pub extern "C" fn bbf_builder_new(path: *const c_char) -> *mut CBbfBuilder {
         }
 
         let c_str = unsafe { CStr::from_ptr(path) };
-        let str_slice = match c_str.to_str() {
-            Ok(s) => s,
-            Err(_) => return ptr::null_mut(),
+        let Ok(str_slice) = c_str.to_str() else {
+            return ptr::null_mut();
         };
 
-        let file = match File::create(str_slice) {
-            Ok(f) => f,
-            Err(_) => return ptr::null_mut(),
+        let Ok(file) = File::create(str_slice) else {
+            return ptr::null_mut();
         };
 
-        match BBFBuilder::new(file) {
-            Ok(builder) => Box::into_raw(Box::new(CBbfBuilder(builder))),
-            Err(_) => ptr::null_mut(),
-        }
+        BBFBuilder::new(file).map_or(ptr::null_mut(), |builder| {
+            Box::into_raw(Box::new(CBbfBuilder(builder)))
+        })
     });
 
     result.unwrap_or(ptr::null_mut())
@@ -48,20 +47,17 @@ pub extern "C" fn bbf_builder_add_page(
 ) -> u32 {
     let result = panic::catch_unwind(|| {
         if builder.is_null() || data.is_null() {
-            return 0xFFFFFFFF;
+            return 0xFFFF_FFFF;
         }
 
         let builder_ref = unsafe { &mut (*builder).0 };
         let slice = unsafe { slice::from_raw_parts(data, len) };
         let mtype = BBFMediaType::from(media_type);
 
-        match builder_ref.add_page(slice, mtype) {
-            Ok(idx) => idx,
-            Err(_) => 0xFFFFFFFF,
-        }
+        builder_ref.add_page(slice, mtype).unwrap_or(0xFFFF_FFFF)
     });
 
-    result.unwrap_or(0xFFFFFFFF)
+    result.unwrap_or(0xFFFF_FFFF)
 }
 
 #[unsafe(no_mangle)]
@@ -72,7 +68,7 @@ pub extern "C" fn bbf_builder_finalize(builder: *mut CBbfBuilder) -> i32 {
         }
         let builder_box = unsafe { Box::from_raw(builder) };
         match builder_box.0.finalize() {
-            Ok(_) => 0,
+            Ok(()) => 0,
             Err(_) => -1,
         }
     });
@@ -88,20 +84,17 @@ pub extern "C" fn bbf_reader_open(path: *const c_char) -> *mut CBbfReader {
         }
 
         let c_str = unsafe { CStr::from_ptr(path) };
-        let str_slice = match c_str.to_str() {
-            Ok(s) => s,
-            Err(_) => return ptr::null_mut(),
+        let Ok(str_slice) = c_str.to_str() else {
+            return ptr::null_mut();
         };
 
-        let file = match File::open(str_slice) {
-            Ok(f) => f,
-            Err(_) => return ptr::null_mut(),
+        let Ok(file) = File::open(str_slice) else {
+            return ptr::null_mut();
         };
 
-        match BBFReader::new(file) {
-            Ok(reader) => Box::into_raw(Box::new(CBbfReader(reader))),
-            Err(_) => ptr::null_mut(),
-        }
+        BBFReader::new(file).map_or(ptr::null_mut(), |reader| {
+            Box::into_raw(Box::new(CBbfReader(reader)))
+        })
     });
 
     result.unwrap_or(ptr::null_mut())

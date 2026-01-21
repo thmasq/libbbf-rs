@@ -4,7 +4,7 @@ use leptos::task::spawn_local;
 use libbbf::{BBFBuilder, BBFMediaType};
 use std::io::Cursor;
 use wasm_bindgen::JsCast;
-use web_sys::HtmlInputElement;
+use web_sys::{HtmlInputElement, KeyboardEvent};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SendFile(pub web_sys::File);
@@ -24,10 +24,11 @@ enum BuilderEntry {
     File {
         id: usize,
         file: SendFile,
+        name: String,
     },
     Section {
         id: usize,
-        name: String,
+        name: RwSignal<String>,
         parent: Option<String>,
     },
 }
@@ -38,6 +39,17 @@ impl BuilderEntry {
             Self::File { id, .. } => *id,
             Self::Section { id, .. } => *id,
         }
+    }
+
+    fn name(&self) -> String {
+        match self {
+            Self::File { name, .. } => name.clone(),
+            Self::Section { name, .. } => name.get(),
+        }
+    }
+
+    fn is_section(&self) -> bool {
+        matches!(self, Self::Section { .. })
     }
 }
 
@@ -54,6 +66,9 @@ pub fn Builder() -> impl IntoView {
     let (metadata, set_metadata) = signal(Vec::<MetaEntry>::new());
     let (status, set_status) = signal(String::new());
 
+    let (editing_id, set_editing_id) = signal(Option::<usize>::None);
+    let (drag_id, set_drag_id) = signal(Option::<usize>::None);
+
     let next_id = RwSignal::new(0_usize);
     let get_id = move || {
         next_id.update(|n| *n += 1);
@@ -68,6 +83,7 @@ pub fn Builder() -> impl IntoView {
                 if let Some(file) = files.get(i) {
                     new_entries.push(BuilderEntry::File {
                         id: get_id(),
+                        name: file.name(),
                         file: SendFile(file),
                     });
                 }
@@ -81,7 +97,7 @@ pub fn Builder() -> impl IntoView {
         set_entries.update(move |e: &mut Vec<BuilderEntry>| {
             e.push(BuilderEntry::Section {
                 id,
-                name: "New Section".to_string(),
+                name: RwSignal::new("New Section".to_string()),
                 parent: None,
             })
         });
@@ -96,6 +112,30 @@ pub fn Builder() -> impl IntoView {
                 value: "".to_string(),
             })
         });
+    };
+
+    let remove_entry = move |id: usize| {
+        set_entries.update(|e| e.retain(|x| x.id() != id));
+    };
+
+    let handle_drag_start = move |id: usize| {
+        set_drag_id.set(Some(id));
+    };
+
+    let handle_drop = move |target_id: usize| {
+        if let Some(dragged) = drag_id.get() {
+            if dragged != target_id {
+                set_entries.update(|list| {
+                    if let Some(from_idx) = list.iter().position(|e| e.id() == dragged) {
+                        if let Some(to_idx) = list.iter().position(|e| e.id() == target_id) {
+                            let item = list.remove(from_idx);
+                            list.insert(to_idx, item);
+                        }
+                    }
+                });
+            }
+        }
+        set_drag_id.set(None);
     };
 
     let compile = move |_| {
@@ -118,9 +158,8 @@ pub fn Builder() -> impl IntoView {
 
             for entry in current_entries {
                 match entry {
-                    BuilderEntry::File { file, .. } => match read_file_to_vec(&file).await {
+                    BuilderEntry::File { file, name, .. } => match read_file_to_vec(&file).await {
                         Ok(data) => {
-                            let name = file.name();
                             let ext = std::path::Path::new(&name)
                                 .extension()
                                 .and_then(|e| e.to_str())
@@ -140,7 +179,7 @@ pub fn Builder() -> impl IntoView {
                         }
                     },
                     BuilderEntry::Section { name, .. } => {
-                        builder.add_section(&name, page_count, None);
+                        builder.add_section(&name.get(), page_count, None);
                     }
                 }
             }
@@ -209,19 +248,93 @@ pub fn Builder() -> impl IntoView {
                             each=move || entries.get()
                             key=|e| e.id()
                             children=move |e| {
-                                match e {
-                                    BuilderEntry::File { file, .. } => view! {
-                                        <div class="p-3 bg-slate-800 rounded-lg border border-slate-700 flex items-center text-slate-300">
-                                            <span class="mr-3 text-lg opacity-70">"📄"</span>
-                                            {file.name()}
+                                let id = e.id();
+                                let is_section = e.is_section();
+
+                                let is_editing = move || editing_id.get() == Some(id);
+                                let is_dragging = move || drag_id.get() == Some(id);
+
+                                view! {
+                                    <div
+                                        class="p-3 rounded-lg border flex items-center justify-between group cursor-move transition-all select-none"
+                                        class:bg-slate-800=move || !is_dragging()
+                                        class:bg-slate-700=move || is_dragging()
+                                        class:opacity-50=move || is_dragging()
+                                        class:border-indigo-500=move || is_editing()
+                                        class:border-slate-700=move || !is_editing()
+
+                                        draggable=move || if is_editing() { "false" } else { "true" }
+                                        on:dragstart=move |_| handle_drag_start(id)
+                                        on:dragover=move |ev: web_sys::DragEvent| ev.prevent_default()
+                                        on:drop=move |ev: web_sys::DragEvent| {
+                                            ev.prevent_default();
+                                            handle_drop(id);
+                                        }
+                                        on:dblclick=move |_| {
+                                            if is_section {
+                                                set_editing_id.set(Some(id));
+                                            }
+                                        }
+                                    >
+                                        <div class="flex items-center flex-1 gap-3 min-w-0">
+                                            <span class="text-xl flex-shrink-0">
+                                                {match e {
+                                                    BuilderEntry::File { .. } => "📄",
+                                                    BuilderEntry::Section { .. } => "🔖",
+                                                }}
+                                            </span>
+
+                                            <div class="flex-1 min-w-0">
+                                            {move || {
+                                                if is_editing() {
+                                                    match e {
+                                                        BuilderEntry::Section { name, .. } => {
+                                                            view! {
+                                                                <input
+                                                                    type="text"
+                                                                    class="bg-slate-900 text-white p-1 border-b border-indigo-500 focus:outline-none w-full"
+                                                                    prop:value=move || name.get()
+                                                                    autofocus
+                                                                    on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()
+                                                                    on:keydown=move |ev: KeyboardEvent| {
+                                                                        if ev.key() == "Enter" {
+                                                                            ev.prevent_default();
+                                                                            let val = event_target_value(&ev);
+                                                                            name.set(val);
+                                                                            set_editing_id.set(None);
+                                                                        } else if ev.key() == "Escape" {
+                                                                            set_editing_id.set(None);
+                                                                        }
+                                                                    }
+                                                                    on:blur=move |_| set_editing_id.set(None)
+                                                                />
+                                                            }.into_any()
+                                                        },
+                                                        _ => view! {}.into_any()
+                                                    }
+                                                } else {
+                                                    let display_name = e.name();
+                                                    view! {
+                                                        <span class="text-slate-300 block truncate" title=display_name.clone()>
+                                                            {display_name.clone()}
+                                                        </span>
+                                                    }.into_any()
+                                                }
+                                            }}
+                                            </div>
                                         </div>
-                                    },
-                                    BuilderEntry::Section { name, .. } => view! {
-                                        <div class="p-3 bg-indigo-950/50 border border-indigo-900/50 rounded-lg flex items-center text-indigo-200 font-medium">
-                                            <span class="mr-3 text-lg">"🔖"</span>
-                                            {format!("Section: {}", name)}
-                                        </div>
-                                    },
+
+                                        <button
+                                            class="text-slate-500 hover:text-red-400 p-2 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            title="Remove"
+                                            on:click=move |ev: web_sys::MouseEvent| {
+                                                ev.stop_propagation();
+                                                remove_entry(id);
+                                            }
+                                        >
+                                            "✕"
+                                        </button>
+                                    </div>
                                 }
                             }
                         />
@@ -239,7 +352,7 @@ pub fn Builder() -> impl IntoView {
                             key=|m| m.id
                             children=move |m| {
                                 view! {
-                                    <div class="flex gap-2">
+                                    <div class="flex gap-2 group">
                                         <input class="bg-slate-800 border border-slate-600 rounded p-2 w-1/3 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                                placeholder="Key"
                                                prop:value=m.key
@@ -252,7 +365,7 @@ pub fn Builder() -> impl IntoView {
                                                    });
                                                }
                                         />
-                                        <input class="bg-slate-800 border border-slate-600 rounded p-2 w-2/3 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        <input class="bg-slate-800 border border-slate-600 rounded p-2 w-full text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                                placeholder="Value"
                                                prop:value=m.value
                                                on:input=move |ev| {
@@ -264,6 +377,12 @@ pub fn Builder() -> impl IntoView {
                                                    });
                                                }
                                         />
+                                        <button
+                                            class="text-slate-500 hover:text-red-400 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            on:click=move |_| set_metadata.update(|list| list.retain(|x| x.id != m.id))
+                                        >
+                                            "✕"
+                                        </button>
                                     </div>
                                 }
                             }

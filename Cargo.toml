@@ -5,3 +5,4 @@ members = [
     "example-webapp",
 ]
 resolver = "2"
+default-members = ["bbfmux", "libbbf"]

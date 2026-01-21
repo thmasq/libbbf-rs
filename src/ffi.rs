@@ -11,8 +11,16 @@ use crate::builder::BBFBuilder;
 use crate::format::BBFMediaType;
 use crate::reader::BBFReader;
 
+#[cfg(not(target_arch = "wasm32"))]
+use memmap2::Mmap;
+
 pub struct CBbfBuilder(BBFBuilder<File>);
-pub struct CBbfReader(BBFReader<File>);
+
+#[cfg(not(target_arch = "wasm32"))]
+pub struct CBbfReader(BBFReader<Mmap>);
+
+#[cfg(target_arch = "wasm32")]
+pub struct CBbfReader(BBFReader<Vec<u8>>);
 
 #[unsafe(no_mangle)]
 pub extern "C" fn bbf_builder_new(path: *const c_char) -> *mut CBbfBuilder {
@@ -95,9 +103,28 @@ pub extern "C" fn bbf_reader_open(path: *const c_char) -> *mut CBbfReader {
             return ptr::null_mut();
         };
 
-        BBFReader::new(file).map_or(ptr::null_mut(), |reader| {
-            Box::into_raw(Box::new(CBbfReader(reader)))
-        })
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mmap = unsafe { Mmap::map(&file) };
+
+            mmap.map_or(ptr::null_mut(), |mmap| {
+                BBFReader::new(mmap).map_or(ptr::null_mut(), |reader| {
+                    Box::into_raw(Box::new(CBbfReader(reader)))
+                })
+            })
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            let mut buffer = Vec::new();
+            if file.read_to_end(&mut buffer).is_err() {
+                return ptr::null_mut();
+            }
+
+            BBFReader::new(buffer).map_or(ptr::null_mut(), |reader| {
+                Box::into_raw(Box::new(CBbfReader(reader)))
+            })
+        }
     });
 
     result.unwrap_or(ptr::null_mut())

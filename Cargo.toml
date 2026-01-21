@@ -8,3 +8,6 @@ crate-type = ["cdylib", "rlib"]
 thiserror = "2.0.18"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 zerocopy = { version = "0.8.33", features = ["derive"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+memmap2 = "0.9.9"

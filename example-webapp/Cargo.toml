@@ -1,7 +1,11 @@
 [package]
 name = "example-webapp"
 version = "0.1.0"
+authors = ["Thomas Q <thomasqsa@gmail.com>"]
 edition = "2024"
+license = "MIT"
+repository = "https://github.com/thmasq/libbbf-rs"
+description = "Example webapp for showcasing the Bound Book Format"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -1,0 +1,113 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish-webapp:
+    name: Publish WebApp
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build WASM
+        run: wasm-pack build example-webapp --target web --release
+
+      - name: Prepare Package for GitHub Registry
+        working-directory: example-webapp/pkg
+        run: |
+          # GitHub Packages requires the name to be scoped to the owner (e.g. @username/package)
+          # We use jq to update the package.json name dynamically
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          jq --arg name "@$OWNER/example-webapp" '.name = $name' package.json > package.json.tmp && mv package.json.tmp package.json
+          
+          # Ensure a publishConfig is present pointing to GitHub
+          jq --arg registry "https://npm.pkg.github.com" '.publishConfig = { registry: $registry }' package.json > package.json.tmp && mv package.json.tmp package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@${{ github.repository_owner }}'
+
+      - name: Publish to GitHub Packages
+        working-directory: example-webapp/pkg
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-binaries:
+    name: Build Binary (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact_name: bbfmux
+            asset_name: bbfmux-linux-x86_64-musl
+            use_cross: true
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            artifact_name: bbfmux
+            asset_name: bbfmux-linux-aarch64-musl
+            use_cross: true
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: bbfmux.exe
+            asset_name: bbfmux-windows-x86_64.exe
+            use_cross: false
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Cross
+        if: matrix.use_cross
+        run: cargo install cross
+
+      - name: Build Binary (Cross)
+        if: matrix.use_cross
+        run: cross build --release --bin bbfmux --target ${{ matrix.target }}
+
+      - name: Build Binary (Cargo)
+        if: ${{ !matrix.use_cross }}
+        run: cargo build --release --bin bbfmux --target ${{ matrix.target }}
+
+      - name: Rename and Pack Binary
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} release-assets/${{ matrix.asset_name }}
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: release-assets/${{ matrix.asset_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

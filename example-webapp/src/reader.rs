@@ -144,7 +144,7 @@ pub fn Reader() -> impl IntoView {
         .section-item:hover { background-color: #1e293b; }
 
         /* Active State for Sections */
-        .section-item[data-active="true"] {
+        .active {
             color: #818cf8; /* text-indigo-400 */
             background-color: #1e293b; /* Keep hover bg */
         }
@@ -375,8 +375,11 @@ pub fn Reader() -> impl IntoView {
 
                                         view! {
                                             <li
-                                                class=reader_css::SECTION_ITEM
-                                                attr:data-active=is_active.to_string()
+                                                class=if is_active {
+                                                    format!("{} {}", reader_css::SECTION_ITEM, reader_css::ACTIVE)
+                                                } else {
+                                                    reader_css::SECTION_ITEM.to_string()
+                                                }
                                                 on:click=move |_| set_page_idx.set(page)
                                             >
                                                 <div class=reader_css::SECTION_TITLE>{title}</div>

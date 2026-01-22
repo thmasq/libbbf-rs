@@ -1,6 +1,7 @@
 use crate::utils::{download_blob, read_file_to_vec};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use leptos_styling::inline_style_sheet;
 use libbbf::{BBFBuilder, BBFMediaType};
 use std::io::Cursor;
 use wasm_bindgen::JsCast;
@@ -77,6 +78,263 @@ pub fn Builder() -> impl IntoView {
         next_id.update(|n| *n += 1);
         next_id.get_untracked()
     };
+
+    inline_style_sheet! {
+        builder_css,
+        "builder",
+
+        .container {
+            padding: 1.5rem;
+            height: 100%;
+            overflow-y: auto;
+            color: #e2e8f0; /* text-slate-200 */
+        }
+
+        .title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: #818cf8; /* text-indigo-400 */
+        }
+
+        /* Control Panel (File Input & Buttons) */
+        .control-panel {
+            background-color: #0f172a; /* bg-slate-900 */
+            border: 1px solid #334155; /* border-slate-700 */
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+
+        .input-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #cbd5e1; /* text-slate-300 */
+        }
+
+        /* Styling the File Input */
+        .file-input {
+            display: block;
+            width: 100%;
+            font-size: 0.875rem;
+            color: #94a3b8; /* text-slate-400 */
+            cursor: pointer;
+        }
+        /* Target the file button specifically */
+        .file-input::file-selector-button {
+            margin-right: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            border: 0;
+            font-size: 0.875rem;
+            font-weight: 600;
+            background-color: #312e81; /* bg-indigo-900 */
+            color: #a5b4fc; /* text-indigo-300 */
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .file-input::file-selector-button:hover {
+            background-color: #3730a3; /* bg-indigo-800 */
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .action-btn {
+            background-color: #1e293b; /* bg-slate-800 */
+            border: 1px solid #475569; /* border-slate-600 */
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+        .action-btn:hover { background-color: #334155; }
+        .text-indigo { color: #a5b4fc; }
+        .text-emerald { color: #34d399; }
+
+        /* Main Columns Layout */
+        .columns-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        @media (min-width: 768px) {
+            .columns-wrapper { flex-direction: row; }
+        }
+
+        .panel {
+            width: 100%;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        @media (min-width: 768px) {
+            .panel { width: 50%; }
+        }
+
+        .panel-header {
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #e2e8f0;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 0.5rem;
+        }
+
+        /* List Items (Draggable) */
+        .list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 500px;
+            overflow-y: auto;
+            min-height: 100px;
+            padding-right: 0.5rem;
+        }
+
+        .list-item {
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid #334155; /* Default border */
+            background-color: #1e293b; /* Default bg */
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: move;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .list-item-content {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            gap: 0.75rem;
+            min-width: 0;
+        }
+
+        /* Dragging State */
+        .list-item[data-dragging="true"] {
+            background-color: #334155;
+            opacity: 0.5;
+        }
+
+        /* Editing State */
+        .list-item[data-editing="true"] {
+            border-color: #6366f1; /* indigo-500 */
+        }
+
+        .item-icon { font-size: 1.25rem; flex-shrink: 0; }
+        .item-text {
+            color: #cbd5e1;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Inline Input for renaming */
+        .inline-input {
+            background-color: #0f172a;
+            color: white;
+            padding: 0.25rem;
+            border: none;
+            border-bottom: 1px solid #6366f1;
+            outline: none;
+            width: 100%;
+        }
+
+        /* Remove Button */
+        .remove-btn {
+            color: #64748b;
+            padding: 0.5rem;
+            margin-left: 0.5rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        .remove-btn:hover { color: #f87171; }
+        .list-item:hover .remove-btn { opacity: 1; }
+
+        /* Metadata Row */
+        .meta-row { display: flex; gap: 0.5rem; align-items: center; }
+        .meta-input {
+            background-color: #1e293b;
+            border: 1px solid #475569;
+            border-radius: 0.25rem;
+            padding: 0.5rem;
+            color: #e2e8f0;
+            width: 100%;
+        }
+        .meta-input:focus { outline: 2px solid #6366f1; border-color: transparent; }
+
+        /* Floating "Ghost" Element */
+        .ghost-cursor {
+            position: fixed;
+            z-index: 50;
+            pointer-events: none;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid #6366f1;
+            background-color: #1e293b;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            opacity: 0.9;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        /* Bottom Bar */
+        .bottom-bar {
+            margin-top: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 0.75rem;
+            padding: 1rem;
+        }
+
+        .status-text { color: #818cf8; font-family: monospace; }
+
+        .compile-btn {
+            background-color: #4f46e5;
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 0.5rem;
+            font-size: 1.125rem;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+            box-shadow: 0 0 20px rgba(79, 70, 229, 0.4);
+        }
+        .compile-btn:hover {
+            background-color: #6366f1;
+            box-shadow: 0 0 30px rgba(79, 70, 229, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .empty-text {
+            text-align: center;
+            padding: 2rem 0;
+            color: #64748b;
+            font-style: italic;
+        }
+    }
 
     let _ = window_event_listener(leptos::ev::mousemove, move |ev| {
         set_mouse_pos.set((ev.client_x() as f64, ev.client_y() as f64));
@@ -254,58 +512,52 @@ pub fn Builder() -> impl IntoView {
     };
 
     view! {
-        <div class="p-6 h-full overflow-y-auto">
+        <div class=builder_css::CONTAINER>
             <Show when=move || floating_entry.get().is_some()>
                 <div
-                    class="fixed z-50 pointer-events-none p-3 rounded-lg border border-indigo-500 bg-slate-800 shadow-2xl opacity-90 flex items-center gap-3"
+                    class=builder_css::GHOST_CURSOR
                     style=move || format!("left: {}px; top: {}px; transform: translate(10px, 10px);", mouse_pos.get().0, mouse_pos.get().1)
                 >
-                     <span class="text-xl">"🔖"</span>
-                     <span class="text-slate-300 font-bold">"Place New Section..."</span>
+                      <span class="text-xl">"🔖"</span>
+                      <span class="font-bold text-slate-300">"Place New Section..."</span>
                 </div>
             </Show>
 
-            <h2 class="text-2xl font-bold mb-6 text-indigo-400">"BBF Builder Mode"</h2>
+            <h2 class=builder_css::TITLE>"BBF Builder Mode"</h2>
 
-            <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-xl mb-6">
+            <div class=builder_css::CONTROL_PANEL>
                 <div class="mb-4">
-                    <label class="block mb-2 text-sm font-medium text-slate-300">"Add Files"</label>
+                    <label class=builder_css::INPUT_LABEL>"Add Files"</label>
                     <input
                         type="file"
                         multiple
                         on:change=handle_files
-                        class="block w-full text-sm text-slate-400
-                            file:mr-4 file:py-2 file:px-4
-                            file:rounded-full file:border-0
-                            file:text-sm file:font-semibold
-                            file:bg-indigo-900 file:text-indigo-300
-                            hover:file:bg-indigo-800
-                            cursor-pointer" 
+                        class=builder_css::FILE_INPUT
                     />
                 </div>
 
-                <div class="flex gap-4 mb-4">
+                <div class=builder_css::BTN_GROUP>
                     <button
                         on:click=add_section
-                        class="bg-slate-800 border border-slate-600 hover:bg-slate-700 text-indigo-300 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                        class=builder_css::ACTION_BTN
                     >
-                        <span>"Add Section Marker"</span>
+                         <span class=builder_css::TEXT_INDIGO>"Add Section Marker"</span>
                     </button>
                     <button
                         on:click=add_meta
-                        class="bg-slate-800 border border-slate-600 hover:bg-slate-700 text-emerald-400 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                        class=builder_css::ACTION_BTN
                     >
-                        <span>"Add Metadata"</span>
+                         <span class=builder_css::TEXT_EMERALD>"Add Metadata"</span>
                     </button>
                 </div>
             </div>
 
-            <div class="flex flex-col md:flex-row gap-6">
-                <div class="w-full md:w-1/2 bg-slate-900 border border-slate-700 rounded-xl p-4 shadow-xl">
-                    <h3 class="font-bold mb-4 text-slate-200 border-b border-slate-700 pb-2">"Content Order"</h3>
+            <div class=builder_css::COLUMNS_WRAPPER>
+                <div class=builder_css::PANEL>
+                    <h3 class=builder_css::PANEL_HEADER>"Content Order"</h3>
 
                     <div
-                        class="space-y-2 max-h-[500px] overflow-y-auto pr-2 min-h-[100px]"
+                        class=builder_css::LIST_CONTAINER
                         on:click=handle_container_click
                     >
                         <For
@@ -320,12 +572,9 @@ pub fn Builder() -> impl IntoView {
 
                                 view! {
                                     <div
-                                        class="p-3 rounded-lg border flex items-center justify-between group cursor-move transition-all select-none"
-                                        class:bg-slate-800=move || !is_dragging()
-                                        class:bg-slate-700=move || is_dragging()
-                                        class:opacity-50=move || is_dragging()
-                                        class:border-indigo-500=move || is_editing()
-                                        class:border-slate-700=move || !is_editing()
+                                        class=builder_css::LIST_ITEM
+                                        attr:data-dragging=move || is_dragging().to_string()
+                                        attr:data-editing=move || is_editing().to_string()
 
                                         draggable=move || if is_editing() { "false" } else { "true" }
                                         on:dragstart=move |_| handle_drag_start(id)
@@ -341,8 +590,8 @@ pub fn Builder() -> impl IntoView {
                                             }
                                         }
                                     >
-                                        <div class="flex items-center flex-1 gap-3 min-w-0">
-                                            <span class="text-xl flex-shrink-0">
+                                        <div class=builder_css::LIST_ITEM_CONTENT>
+                                            <span class=builder_css::ITEM_ICON>
                                                 {match e {
                                                     BuilderEntry::File { .. } => "📄",
                                                     BuilderEntry::Section { .. } => "🔖",
@@ -357,7 +606,7 @@ pub fn Builder() -> impl IntoView {
                                                             view! {
                                                                 <input
                                                                     type="text"
-                                                                    class="bg-slate-900 text-white p-1 border-b border-indigo-500 focus:outline-none w-full"
+                                                                    class=builder_css::INLINE_INPUT
                                                                     prop:value=move || name.get()
                                                                     autofocus
                                                                     on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()
@@ -380,7 +629,7 @@ pub fn Builder() -> impl IntoView {
                                                 } else {
                                                     let display_name = e.name();
                                                     view! {
-                                                        <span class="text-slate-300 block truncate" title=display_name.clone()>
+                                                        <span class=builder_css::ITEM_TEXT title=display_name.clone()>
                                                             {display_name.clone()}
                                                         </span>
                                                     }.into_any()
@@ -390,7 +639,7 @@ pub fn Builder() -> impl IntoView {
                                         </div>
 
                                         <button
-                                            class="text-slate-500 hover:text-red-400 p-2 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            class=builder_css::REMOVE_BTN
                                             title="Remove"
                                             on:click=move |ev: web_sys::MouseEvent| {
                                                 ev.stop_propagation();
@@ -404,21 +653,21 @@ pub fn Builder() -> impl IntoView {
                             }
                         />
                          <Show when=move || entries.get().is_empty()>
-                            <div class="text-slate-500 text-center py-8 italic">"No files added yet."</div>
+                            <div class=builder_css::EMPTY_TEXT>"No files added yet."</div>
                          </Show>
                     </div>
                 </div>
 
-                <div class="w-full md:w-1/2 bg-slate-900 border border-slate-700 rounded-xl p-4 shadow-xl">
-                    <h3 class="font-bold mb-4 text-slate-200 border-b border-slate-700 pb-2">"Metadata"</h3>
-                     <div class="space-y-2">
-                         <For
+                <div class=builder_css::PANEL>
+                    <h3 class=builder_css::PANEL_HEADER>"Metadata"</h3>
+                      <div class="space-y-2">
+                          <For
                             each=move || metadata.get()
                             key=|m| m.id
                             children=move |m| {
                                 view! {
-                                    <div class="flex gap-2 group">
-                                        <input class="bg-slate-800 border border-slate-600 rounded p-2 w-1/3 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    <div class=builder_css::META_ROW>
+                                        <input class=builder_css::META_INPUT style="width: 33%"
                                                placeholder="Key"
                                                prop:value=m.key
                                                on:input=move |ev| {
@@ -430,7 +679,7 @@ pub fn Builder() -> impl IntoView {
                                                    });
                                                }
                                         />
-                                        <input class="bg-slate-800 border border-slate-600 rounded p-2 w-full text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        <input class=builder_css::META_INPUT
                                                placeholder="Value"
                                                prop:value=m.value
                                                on:input=move |ev| {
@@ -443,7 +692,7 @@ pub fn Builder() -> impl IntoView {
                                                }
                                         />
                                         <button
-                                            class="text-slate-500 hover:text-red-400 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            class=builder_css::REMOVE_BTN
                                             on:click=move |_| set_metadata.update(|list| list.retain(|x| x.id != m.id))
                                         >
                                             "✕"
@@ -453,17 +702,17 @@ pub fn Builder() -> impl IntoView {
                             }
                         />
                         <Show when=move || metadata.get().is_empty()>
-                            <div class="text-slate-500 text-center py-8 italic">"No metadata."</div>
+                            <div class=builder_css::EMPTY_TEXT>"No metadata."</div>
                          </Show>
                     </div>
                 </div>
             </div>
 
-            <div class="mt-8 flex items-center justify-between bg-slate-900 border border-slate-700 rounded-xl p-4">
-                <div class="text-indigo-400 font-mono">{status}</div>
+            <div class=builder_css::BOTTOM_BAR>
+                <div class=builder_css::STATUS_TEXT>{status}</div>
                 <button
                     on:click=compile
-                    class="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-3 rounded-lg text-lg font-bold shadow-[0_0_20px_rgba(79,70,229,0.4)] hover:shadow-[0_0_30px_rgba(79,70,229,0.6)] transition-all transform hover:-translate-y-0.5"
+                    class=builder_css::COMPILE_BTN
                 >
                     "Compile & Download .bbf"
                 </button>

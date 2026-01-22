@@ -1,6 +1,7 @@
 use crate::utils::read_file_to_vec;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use leptos_styling::inline_style_sheet;
 use libbbf::BBFReader;
 use std::sync::Arc;
 use wasm_bindgen::JsCast;
@@ -20,6 +21,201 @@ pub fn Reader() -> impl IntoView {
     let (page_idx, set_page_idx) = signal(0u32);
     let (img_url, set_img_url) = signal(String::new());
     let (status, set_status) = signal(String::new());
+
+    inline_style_sheet! {
+        reader_css,
+        "reader",
+
+        /* Layout Containers */
+        .container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            color: #e2e8f0; /* text-slate-200 */
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            background-color: #0f172a; /* bg-slate-900 */
+            border-bottom: 1px solid #334155; /* border-slate-700 */
+            padding: 1rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+        }
+
+        .spacer { flex: 1; }
+
+        /* UI Components */
+        .upload-label {
+            background-color: #4f46e5; /* bg-indigo-600 */
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.2s;
+        }
+        .upload-label:hover { background-color: #6366f1; }
+
+        .status {
+            color: #a5b4fc; /* text-indigo-300 */
+            font-family: monospace;
+            font-size: 0.875rem;
+            border-left: 1px solid #334155;
+            padding-left: 1rem;
+        }
+
+        .verify-btn {
+            background-color: #1e293b; /* bg-slate-800 */
+            border: 1px solid rgba(245, 158, 11, 0.3); /* amber-500/30 */
+            color: #f59e0b; /* text-amber-500 */
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .verify-btn:hover { background-color: rgba(120, 53, 15, 0.2); }
+
+        /* Empty State */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #64748b; /* text-slate-500 */
+        }
+        .empty-icon { font-size: 3.75rem; margin-bottom: 1rem; opacity: 0.2; }
+        .empty-text { font-size: 1.125rem; }
+
+        /* Sidebar (Sections & Metadata) */
+        .sidebar {
+            width: 16rem; /* w-64 */
+            background-color: #0f172a; /* bg-slate-900 */
+            border-right: 1px solid #334155;
+            overflow-y: auto;
+            display: none; /* hidden by default on mobile */
+        }
+
+        /* Media query to show sidebar on md screens and up */
+        @media (min-width: 768px) {
+            .sidebar { display: block; }
+        }
+
+        .sidebar-header {
+            padding: 1rem;
+            background-color: #1e293b; /* bg-slate-800 */
+            border-bottom: 1px solid #334155;
+            font-weight: 700;
+            color: #e2e8f0;
+            position: sticky;
+            top: 0;
+        }
+
+        .sidebar-header-meta {
+            margin-top: 1rem;
+            border-top: 1px solid #334155;
+            border-bottom: 1px solid #334155;
+        }
+
+        .sidebar-list { padding: 0.5rem; list-style: none; margin: 0; }
+        .meta-list { padding: 1rem; list-style: none; margin: 0; font-size: 0.75rem; color: #94a3b8; }
+
+        /* Sidebar Items */
+        .section-item {
+            cursor: pointer;
+            padding: 0.375rem 0.5rem;
+            border-radius: 0.25rem;
+            transition: background-color 0.2s;
+            color: #94a3b8; /* Default text-slate-400 */
+        }
+        .section-item:hover { background-color: #1e293b; }
+
+        /* Active State for Sections */
+        .section-item[data-active="true"] {
+            color: #818cf8; /* text-indigo-400 */
+            background-color: #1e293b; /* Keep hover bg */
+        }
+
+        .section-title { font-weight: 500; font-size: 0.875rem; }
+        .section-page { font-size: 0.75rem; opacity: 0.5; }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid #1e293b;
+            padding-bottom: 0.25rem;
+            margin-bottom: 0.5rem;
+        }
+        .meta-item:last-child { border-bottom: none; }
+        .meta-key { color: #818cf8; font-weight: 700; }
+        .meta-val { color: #cbd5e1; word-break: break-all; }
+
+        /* Image Viewer Area */
+        .viewer-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: black;
+            position: relative;
+        }
+
+        .image-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+            padding: 1rem;
+            cursor: pointer;
+        }
+
+        .page-image {
+            max-height: 100%;
+            max-width: 100%;
+            object-fit: contain;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        /* Bottom Controls */
+        .controls {
+            background-color: #0f172a;
+            border-top: 1px solid #334155;
+            color: #e2e8f0;
+            padding: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 20;
+        }
+
+        .nav-btn {
+            padding: 0.375rem 1rem;
+            background-color: #1e293b;
+            border: 1px solid #475569;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            color: inherit;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .nav-btn:hover { background-color: #334155; }
+
+        .page-counter { font-family: monospace; font-size: 0.875rem; color: #a5b4fc; }
+        .page-number { color: white; font-weight: 700; }
+    }
 
     let handle_file = move |ev: web_sys::Event| {
         let target: HtmlInputElement = ev.target().unwrap().unchecked_into();
@@ -136,21 +332,21 @@ pub fn Reader() -> impl IntoView {
     };
 
     view! {
-        <div class="h-full flex flex-col">
-            <div class="bg-slate-900 border-b border-slate-700 p-4 flex gap-4 items-center shadow-md z-10">
-                 <label class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-md text-sm font-medium">
+        <div class=reader_css::CONTAINER>
+            <div class=reader_css::TOP_BAR>
+                 <label class=reader_css::UPLOAD_LABEL>
                     "Open .bbf"
-                    <input type="file" accept=".bbf" on:change=handle_file class="hidden" />
+                    <input type="file" accept=".bbf" on:change=handle_file class="hidden" style="display:none" />
                 </label>
 
-                <span class="text-indigo-300 font-mono text-sm border-l border-slate-700 pl-4">{status}</span>
+                <span class=reader_css::STATUS>{status}</span>
 
-                <div class="flex-1"></div>
+                <div class=reader_css::SPACER></div>
 
                 <Show when=move || book.get().is_some()>
-                     <button
+                      <button
                         on:click=verify_integrity
-                        class="bg-slate-800 border border-amber-500/30 text-amber-500 hover:bg-amber-900/20 px-3 py-1 rounded text-sm transition-colors"
+                        class=reader_css::VERIFY_BTN
                     >
                         "Verify Integrity"
                     </button>
@@ -158,15 +354,15 @@ pub fn Reader() -> impl IntoView {
             </div>
 
             <Show when=move || book.get().is_some() fallback=|| view! {
-                <div class="flex flex-col items-center justify-center h-full text-slate-500">
-                    <div class="text-6xl mb-4 opacity-20">"📖"</div>
-                    <div class="text-lg">"Select a BBF file to begin reading."</div>
+                <div class=reader_css::EMPTY_STATE>
+                    <div class=reader_css::EMPTY_ICON>"📖"</div>
+                    <div class=reader_css::EMPTY_TEXT>"Select a BBF file to begin reading."</div>
                 </div>
             }>
-                <div class="flex flex-1 overflow-hidden">
-                    <div class="w-64 bg-slate-900 border-r border-slate-700 p-0 overflow-y-auto hidden md:block">
-                        <div class="p-4 bg-slate-800 border-b border-slate-700 font-bold text-slate-200 sticky top-0">"Sections"</div>
-                        <ul class="p-2 space-y-1">
+                <div class=reader_css::MAIN_CONTENT>
+                    <div class=reader_css::SIDEBAR>
+                        <div class=reader_css::SIDEBAR_HEADER>"Sections"</div>
+                        <ul class=reader_css::SIDEBAR_LIST>
                             {move || {
                                 book.get().map(|bk| {
                                     let reader = bk.reader.clone();
@@ -177,21 +373,24 @@ pub fn Reader() -> impl IntoView {
                                         let page = s.section_start_index.get();
                                         let is_active = page_idx.get() >= page;
 
-                                        let active_class = if is_active { "text-indigo-400" } else { "text-slate-400" };
-
                                         view! {
-                                            <li class=format!("cursor-pointer hover:bg-slate-800 rounded px-2 py-1.5 transition-colors {}", active_class)
-                                                on:click=move |_| set_page_idx.set(page)>
-                                                <div class="font-medium text-sm">{title}</div>
-                                                <div class="text-xs opacity-50">"Page " {page + 1}</div>
+                                            <li
+                                                class=reader_css::SECTION_ITEM
+                                                attr:data-active=is_active.to_string()
+                                                on:click=move |_| set_page_idx.set(page)
+                                            >
+                                                <div class=reader_css::SECTION_TITLE>{title}</div>
+                                                <div class=reader_css::SECTION_PAGE>"Page " {page + 1}</div>
                                             </li>
                                         }
                                     }).collect_view()
                                 })
                             }}
                         </ul>
-                         <div class="p-4 bg-slate-800 border-y border-slate-700 font-bold text-slate-200 mt-4">"Metadata"</div>
-                         <ul class="p-4 space-y-2 text-xs text-slate-400">
+
+                         <div class=format!("{} {}", reader_css::SIDEBAR_HEADER, reader_css::SIDEBAR_HEADER_META)>"Metadata"</div>
+
+                         <ul class=reader_css::META_LIST>
                              {move || {
                                 book.get().map(|bk| {
                                     let reader = bk.reader.clone();
@@ -201,9 +400,9 @@ pub fn Reader() -> impl IntoView {
                                         let k = reader_for_closure.get_string(m.key_offset.get()).unwrap_or("?").to_string();
                                         let v = reader_for_closure.get_string(m.val_offset.get()).unwrap_or("?").to_string();
                                         view! {
-                                            <li class="flex flex-col border-b border-slate-800 pb-1 last:border-0">
-                                                <span class="text-indigo-400 font-bold">{k}</span>
-                                                <span class="text-slate-300 break-all">{v}</span>
+                                            <li class=reader_css::META_ITEM>
+                                                <span class=reader_css::META_KEY>{k}</span>
+                                                <span class=reader_css::META_VAL>{v}</span>
                                             </li>
                                         }
                                     }).collect_view()
@@ -212,28 +411,28 @@ pub fn Reader() -> impl IntoView {
                          </ul>
                     </div>
 
-                    <div class="flex-1 flex flex-col bg-black relative">
-                        <div class="flex-1 flex items-center justify-center overflow-auto p-4 cursor-pointer"
-                             on:click=move |ev| {
+                    <div class=reader_css::VIEWER_AREA>
+                        <div
+                            class=reader_css::IMAGE_CONTAINER
+                            on:click=move |ev| {
                                  let width = web_sys::window().unwrap().inner_width().unwrap().as_f64().unwrap();
                                  let x = ev.client_x() as f64;
                                  if x > width / 2.0 { next_page_logic(); } else { prev_page_logic(); }
-                             }>
-                             <img src=move || img_url.get() class="max-h-full max-w-full shadow-2xl object-contain" />
+                            }
+                        >
+                            <img src=move || img_url.get() class=reader_css::PAGE_IMAGE />
                         </div>
 
-                        <div class="bg-slate-900 border-t border-slate-700 text-slate-200 p-3 flex justify-between items-center z-20">
-                             <button on:click=move |_| prev_page_logic()
-                                class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-sm transition-colors">
+                        <div class=reader_css::CONTROLS>
+                             <button on:click=move |_| prev_page_logic() class=reader_css::NAV_BTN>
                                 "Previous"
                              </button>
 
-                             <span class="font-mono text-sm text-indigo-300">
-                                "Page " <span class="text-white font-bold">{move || page_idx.get() + 1}</span>
+                             <span class=reader_css::PAGE_COUNTER>
+                                "Page " <span class=reader_css::PAGE_NUMBER>{move || page_idx.get() + 1}</span>
                              </span>
 
-                             <button on:click=move |_| next_page_logic()
-                                class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-sm transition-colors">
+                             <button on:click=move |_| next_page_logic() class=reader_css::NAV_BTN>
                                 "Next"
                              </button>
                         </div>

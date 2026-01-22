@@ -92,6 +92,7 @@ jobs:
             lib_name: libbbf.so
             asset_bin: bbfmux-linux-x86_64-musl
             asset_lib: libbbf-linux-x86_64-gnu.so
+            generate_bindings: true
 
           # Linux ARM64
           - os: ubuntu-latest
@@ -103,6 +104,7 @@ jobs:
             lib_name: libbbf.so
             asset_bin: bbfmux-linux-aarch64-musl
             asset_lib: libbbf-linux-aarch64-gnu.so
+            generate_bindings: false
 
           # Windows
           - os: windows-latest
@@ -116,6 +118,7 @@ jobs:
             asset_bin: bbfmux-windows-x86_64.exe
             asset_lib: bbf-windows-x86_64.dll
             asset_import_lib: bbf-windows-x86_64.lib
+            generate_bindings: false
 
     steps:
       - uses: actions/checkout@v4
@@ -152,18 +155,87 @@ jobs:
 
       - name: Build Library (Cross)
         if: matrix.use_cross
-        run: cross build --release --lib -p bbf --target ${{ matrix.lib_target }}
+        run: cross build --release --lib -p bbf --target ${{ matrix.lib_target }} --features uniffi-bindings
 
       - name: Build Library (Cargo)
         if: ${{ !matrix.use_cross }}
-        run: cargo build --release --lib -p bbf --target ${{ matrix.lib_target }}
+        run: cargo build --release --lib -p bbf --target ${{ matrix.lib_target }} --features uniffi-bindings
+
+      - name: Generate Kotlin Bindings
+        if: matrix.generate_bindings
+        shell: bash
+        run: |
+          cargo run --features="uniffi-bindings" -p bbf --bin uniffi-bindgen -- \
+            generate --library target/${{ matrix.lib_target }}/release/${{ matrix.lib_name }} \
+            --language kotlin \
+            --out-dir bindings/kotlin \
+            --no-format
+
+          # 2. Locate the generated file (handles nested package directories automatically)
+          KOTLIN_FILE=$(find bindings/kotlin -name "*.kt" | head -n 1)
+          echo "Found generated file: $KOTLIN_FILE"
+
+          cat <<EOF >> "$KOTLIN_FILE"
+
+          /**
+           * Helper to automatically load the correct native library from the JAR resources.
+           * Call \`BbfLibraryLoader.load()\` at the start of your application.
+           */
+          object BbfLibraryLoader {
+              private var loaded = false
+
+              @Synchronized
+              fun load() {
+                  if (loaded) return
+
+                  val os = System.getProperty("os.name").lowercase()
+                  val arch = System.getProperty("os.arch").lowercase()
+
+                  // 1. Determine the resource path based on OS and Arch
+                  // Ensure your JAR structure matches these paths!
+                  val resourcePath = when {
+                      os.contains("linux") -> "/native/linux-x86_64/libbbf.so"
+                      os.contains("win") -> "/native/win32-x86_64/bbf.dll"
+                      os.contains("mac") || os.contains("darwin") -> {
+                          if (arch == "aarch64" || arch == "arm64") {
+                              "/native/darwin-aarch64/libbbf.dylib"
+                          } else {
+                              "/native/darwin-x86_64/libbbf.dylib"
+                          }
+                      }
+                      else -> throw RuntimeException("Unsupported OS/Arch: \$os / \$arch")
+                  }
+
+                  // 2. Extract the library from the JAR to a temp file
+                  val stream = this::class.java.getResourceAsStream(resourcePath)
+                      ?: throw RuntimeException("Native library not found in resources at: \$resourcePath")
+
+                  // Create a temp file with the correct extension
+                  val ext = if (os.contains("win")) ".dll" else if (os.contains("mac")) ".dylib" else ".so"
+                  val tempFile = java.nio.file.Files.createTempFile("libbbf", ext).toFile()
+                  tempFile.deleteOnExit()
+
+                  stream.use { input ->
+                      tempFile.outputStream().use { output ->
+                          input.copyTo(output)
+                      }
+                  }
+
+                  // 3. Override the UniFFI library path
+                  System.setProperty("uniffi.component.bbf.libraryOverride", tempFile.absolutePath)
+                  
+                  loaded = true
+              }
+          }
+          EOF
+
+          cp "$KOTLIN_FILE" release-assets/bbf.kt
 
       - name: Save Library
         shell: bash
         run: |
           cp target/${{ matrix.lib_target }}/release/${{ matrix.lib_name }} release-assets/${{ matrix.asset_lib }}
           
-          # Handle Windows Import Lib
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             cp target/${{ matrix.lib_target }}/release/${{ matrix.import_lib }} release-assets/${{ matrix.asset_import_lib }}
           fi

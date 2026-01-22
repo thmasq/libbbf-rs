@@ -213,6 +213,7 @@ pub fn Builder() -> impl IntoView {
             cursor: move;
             transition: all 0.2s;
             user-select: none;
+            position: relative;
         }
 
         .list-item-content {
@@ -259,14 +260,19 @@ pub fn Builder() -> impl IntoView {
             color: #64748b;
             padding: 0.5rem;
             margin-left: 0.5rem;
-            opacity: 0;
-            transition: opacity 0.2s;
+            transition: all 0.2s;
             cursor: pointer;
             background: none;
             border: none;
+            opacity: 0.7;
         }
-        .remove-btn:hover { color: #f87171; }
-        .list-item:hover .remove-btn { opacity: 1; }
+
+        .remove-btn:hover {
+            opacity: 1;
+            color: #f87171;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 0.25rem;
+        }
 
         /* Metadata Row */
         .meta-row { display: flex; gap: 0.5rem; align-items: center; }

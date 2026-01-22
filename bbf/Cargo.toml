@@ -1,7 +1,11 @@
 [package]
-name = "libbbf"
+name = "bbf"
 version = "0.1.0"
 edition = "2024"
+
+[lib]
+name = "bbf"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 thiserror = "2.0.18"

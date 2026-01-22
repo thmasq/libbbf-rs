@@ -184,12 +184,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "bbf"
+version = "0.1.0"
+dependencies = [
+ "memmap2",
+ "thiserror 2.0.18",
+ "xxhash-rust",
+ "zerocopy",
+]
+
+[[package]]
 name = "bbfmux"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bbf",
  "clap",
- "libbbf",
  "memmap2",
  "rayon",
  "xxhash-rust",
@@ -661,12 +671,12 @@ name = "example-webapp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bbf",
  "console_error_panic_hook",
  "leptos",
  "leptos_meta",
  "leptos_router",
  "leptos_styling",
- "libbbf",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -1350,16 +1360,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libbbf"
-version = "0.1.0"
-dependencies = [
- "memmap2",
- "thiserror 2.0.18",
- "xxhash-rust",
- "zerocopy",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.180"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1748,9 +1748,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.105"
+version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "535d180e0ecab6268a3e718bb9fd44db66bbbc256257165fc699dadf70d16fe7"
+checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
 ]

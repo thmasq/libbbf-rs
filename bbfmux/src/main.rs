@@ -1,8 +1,8 @@
 #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use anyhow::{Context, Result, bail};
+use bbf::{BBFBuilder, BBFMediaType, BBFReader, format::BBFFooter};
 use clap::{Parser, Subcommand};
-use libbbf::{BBFBuilder, BBFMediaType, BBFReader};
 use memmap2::Mmap;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::cmp::Ordering;
@@ -304,7 +304,7 @@ fn cmd_verify(path: &Path, user_index: Option<i32>) -> Result<()> {
     let data = &mmap[..];
 
     let meta_start = reader.footer.string_pool_offset.get() as usize;
-    let meta_size = data.len() - size_of::<libbbf::format::BBFFooter>() - meta_start;
+    let meta_size = data.len() - size_of::<BBFFooter>() - meta_start;
 
     if meta_start + meta_size > data.len() {
         bail!("File corrupted: Table offsets invalid");

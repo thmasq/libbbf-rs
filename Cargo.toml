@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "libbbf",
+    "bbf",
     "bbfmux",
     "example-webapp",
 ]
 resolver = "2"
-default-members = ["bbfmux", "libbbf"]
+default-members = ["bbfmux", "bbf"]

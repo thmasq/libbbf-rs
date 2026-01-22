@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.100"
 clap = { version = "4.5.54", features = ["derive"] }
-libbbf = { path = "../libbbf" }
+bbf = { path = "../bbf" }
 memmap2 = "0.9.9"
 rayon = "1.11.0"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }

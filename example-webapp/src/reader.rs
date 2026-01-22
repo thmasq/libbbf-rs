@@ -1,11 +1,11 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::utils::read_file_to_vec;
+use bbf::{BBFMediaType, BBFReader};
 use leptos::ev::{mousemove, mouseup};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_styling::inline_style_sheet;
-use libbbf::BBFReader;
 use std::sync::Arc;
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlInputElement, MouseEvent, Url, js_sys};
@@ -317,7 +317,7 @@ pub fn Reader() -> impl IntoView {
                 if let Ok(asset_data) = bk.reader.get_asset(asset_idx) {
                     let assets = bk.reader.assets();
                     let asset_entry = &assets[asset_idx as usize];
-                    let mime = libbbf::BBFMediaType::from(asset_entry.type_).as_extension();
+                    let mime = BBFMediaType::from(asset_entry.type_).as_extension();
 
                     let mime_str = match mime {
                         ".png" => "image/png",

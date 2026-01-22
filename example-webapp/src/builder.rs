@@ -1,8 +1,8 @@
 use crate::utils::{download_blob, read_file_to_vec};
+use bbf::{BBFBuilder, BBFMediaType};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_styling::inline_style_sheet;
-use libbbf::{BBFBuilder, BBFMediaType};
 use std::io::Cursor;
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlInputElement, KeyboardEvent};

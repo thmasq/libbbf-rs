@@ -3,6 +3,7 @@ use crate::reader::Reader;
 use leptos::prelude::*;
 use leptos_styling::{StyleSheets, inline_style_sheet};
 
+#[allow(clippy::too_many_lines)]
 #[component]
 pub fn App() -> impl IntoView {
     let (mode, set_mode) = signal("read"); // read | write

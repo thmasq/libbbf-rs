@@ -1,3 +1,5 @@
+#![allow(clippy::cast_possible_truncation)]
+
 use crate::utils::read_file_to_vec;
 use leptos::ev::{mousemove, mouseup};
 use leptos::prelude::*;
@@ -16,6 +18,7 @@ struct LoadedBook {
     reader: Arc<BBFReader<Arc<[u8]>>>,
 }
 
+#[allow(clippy::too_many_lines)]
 #[component]
 pub fn Reader() -> impl IntoView {
     let (book, set_book) = signal(Option::<LoadedBook>::None);
@@ -231,7 +234,7 @@ pub fn Reader() -> impl IntoView {
         if is_resizing.get() {
             ev.prevent_default();
             let new_width = ev.client_x();
-            let clamped = new_width.max(150).min(600);
+            let clamped = new_width.clamp(150, 600);
             set_sidebar_width.set(clamped);
         }
     });
@@ -259,48 +262,48 @@ pub fn Reader() -> impl IntoView {
 
     let handle_file = move |ev: web_sys::Event| {
         let target: HtmlInputElement = ev.target().unwrap().unchecked_into();
-        if let Some(files) = target.files() {
-            if let Some(file) = files.get(0) {
-                let fname = file.name();
-                spawn_local(async move {
-                    set_status.set("Loading & Verifying...".to_string());
-                    match read_file_to_vec(&file).await {
-                        Ok(vec) => {
-                            let data_arc: Arc<[u8]> = Arc::from(vec);
+        if let Some(files) = target.files()
+            && let Some(file) = files.get(0)
+        {
+            let fname = file.name();
+            spawn_local(async move {
+                set_status.set("Loading & Verifying...".to_string());
+                match read_file_to_vec(&file).await {
+                    Ok(vec) => {
+                        let data_arc: Arc<[u8]> = Arc::from(vec);
 
-                            match BBFReader::new(data_arc) {
-                                Ok(r) => {
-                                    let assets = r.assets();
-                                    let mut bad = 0;
-                                    for (i, asset) in assets.iter().enumerate() {
-                                        if let Ok(data) = r.get_asset(i as u32) {
-                                            if xxh3_64(data) != asset.xxh3_hash.get() {
-                                                bad += 1;
-                                            }
-                                        } else {
+                        match BBFReader::new(data_arc) {
+                            Ok(r) => {
+                                let assets = r.assets();
+                                let mut bad = 0;
+                                for (i, asset) in assets.iter().enumerate() {
+                                    if let Ok(data) = r.get_asset(i as u32) {
+                                        if xxh3_64(data) != asset.xxh3_hash.get() {
                                             bad += 1;
                                         }
-                                    }
-
-                                    if bad == 0 {
-                                        set_status.set("Integrity: OK".to_string());
                                     } else {
-                                        set_status.set(format!("Integrity: {} CORRUPT", bad));
+                                        bad += 1;
                                     }
-
-                                    set_book.set(Some(LoadedBook {
-                                        name: fname,
-                                        reader: Arc::new(r),
-                                    }));
-                                    set_page_idx.set(0);
                                 }
-                                Err(e) => set_status.set(format!("Invalid BBF: {:?}", e)),
+
+                                if bad == 0 {
+                                    set_status.set("Integrity: OK".to_string());
+                                } else {
+                                    set_status.set(format!("Integrity: {bad} CORRUPT"));
+                                }
+
+                                set_book.set(Some(LoadedBook {
+                                    name: fname,
+                                    reader: Arc::new(r),
+                                }));
+                                set_page_idx.set(0);
                             }
+                            Err(e) => set_status.set(format!("Invalid BBF: {e:?}")),
                         }
-                        Err(_) => set_status.set("Read error".to_string()),
                     }
-                });
-            }
+                    Err(_) => set_status.set("Read error".to_string()),
+                }
+            });
         }
     };
 
@@ -333,14 +336,13 @@ pub fn Reader() -> impl IntoView {
 
                     if let Ok(blob) =
                         web_sys::Blob::new_with_blob_sequence_and_options(&array, &bag)
+                        && let Ok(url) = Url::create_object_url_with_blob(&blob)
                     {
-                        if let Ok(url) = Url::create_object_url_with_blob(&blob) {
-                            let old = img_url.get_untracked();
-                            if !old.is_empty() {
-                                let _ = Url::revoke_object_url(&old);
-                            }
-                            set_img_url.set(url);
+                        let old = img_url.get_untracked();
+                        if !old.is_empty() {
+                            let _ = Url::revoke_object_url(&old);
                         }
+                        set_img_url.set(url);
                     }
                 }
             }
@@ -388,10 +390,10 @@ pub fn Reader() -> impl IntoView {
                         <ul class=reader_css::SIDEBAR_LIST>
                             {move || {
                                 book.get().map(|bk| {
-                                    let reader = bk.reader.clone();
+                                    let reader = bk.reader;
                                     let reader_for_closure = reader.clone();
 
-                                    reader.sections().iter().enumerate().map(move |(_, s)| {
+                                    reader.sections().iter().map(move |s| {
                                         let title = reader_for_closure.get_string(s.section_title_offset.get()).unwrap_or("?").to_string();
                                         let page = s.section_start_index.get();
                                         let is_active = page_idx.get() >= page;
@@ -419,7 +421,7 @@ pub fn Reader() -> impl IntoView {
                          <ul class=reader_css::META_LIST>
                              {move || {
                                 book.get().map(|bk| {
-                                    let reader = bk.reader.clone();
+                                    let reader = bk.reader;
                                     let reader_for_closure = reader.clone();
 
                                     reader.metadata().iter().map(move |m| {
@@ -451,7 +453,7 @@ pub fn Reader() -> impl IntoView {
                             class=reader_css::IMAGE_CONTAINER
                             on:click=move |ev| {
                                  let width = web_sys::window().unwrap().inner_width().unwrap().as_f64().unwrap();
-                                 let x = ev.client_x() as f64;
+                                 let x = f64::from(ev.client_x());
                                  if x > width / 2.0 { next_page_logic(); } else { prev_page_logic(); }
                             }
                         >

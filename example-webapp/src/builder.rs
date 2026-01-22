@@ -7,7 +7,7 @@ use std::io::Cursor;
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlInputElement, KeyboardEvent};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SendFile(pub web_sys::File);
 
 unsafe impl Send for SendFile {}
@@ -35,10 +35,9 @@ enum BuilderEntry {
 }
 
 impl BuilderEntry {
-    fn id(&self) -> usize {
+    const fn id(&self) -> usize {
         match self {
-            Self::File { id, .. } => *id,
-            Self::Section { id, .. } => *id,
+            Self::File { id, .. } | Self::Section { id, .. } => *id,
         }
     }
 
@@ -49,7 +48,7 @@ impl BuilderEntry {
         }
     }
 
-    fn is_section(&self) -> bool {
+    const fn is_section(&self) -> bool {
         matches!(self, Self::Section { .. })
     }
 }
@@ -61,6 +60,7 @@ struct MetaEntry {
     value: String,
 }
 
+#[allow(clippy::too_many_lines)]
 #[component]
 pub fn Builder() -> impl IntoView {
     let (entries, set_entries) = signal(Vec::<BuilderEntry>::new());
@@ -343,7 +343,7 @@ pub fn Builder() -> impl IntoView {
     }
 
     let handle = window_event_listener(leptos::ev::mousemove, move |ev| {
-        set_mouse_pos.set((ev.client_x() as f64, ev.client_y() as f64));
+        set_mouse_pos.set((f64::from(ev.client_x()), f64::from(ev.client_y())));
     });
 
     on_cleanup(move || handle.remove());
@@ -389,9 +389,9 @@ pub fn Builder() -> impl IntoView {
         set_metadata.update(move |m: &mut Vec<MetaEntry>| {
             m.push(MetaEntry {
                 id,
-                key: "".to_string(),
-                value: "".to_string(),
-            })
+                key: String::new(),
+                value: String::new(),
+            });
         });
     };
 
@@ -404,17 +404,17 @@ pub fn Builder() -> impl IntoView {
     };
 
     let handle_drop = move |target_id: usize| {
-        if let Some(dragged) = drag_id.get() {
-            if dragged != target_id {
-                set_entries.update(|list| {
-                    if let Some(from_idx) = list.iter().position(|e| e.id() == dragged) {
-                        if let Some(to_idx) = list.iter().position(|e| e.id() == target_id) {
-                            let item = list.remove(from_idx);
-                            list.insert(to_idx, item);
-                        }
-                    }
-                });
-            }
+        if let Some(dragged) = drag_id.get()
+            && dragged != target_id
+        {
+            set_entries.update(|list| {
+                if let Some(from_idx) = list.iter().position(|e| e.id() == dragged)
+                    && let Some(to_idx) = list.iter().position(|e| e.id() == target_id)
+                {
+                    let item = list.remove(from_idx);
+                    list.insert(to_idx, item);
+                }
+            });
         }
         set_drag_id.set(None);
     };
@@ -430,7 +430,7 @@ pub fn Builder() -> impl IntoView {
 
             let children = target_div.children();
             let len = children.length();
-            let mouse_y = ev.client_y() as f64;
+            let mouse_y = f64::from(ev.client_y());
 
             let mut insert_idx = len as usize;
 
@@ -467,7 +467,7 @@ pub fn Builder() -> impl IntoView {
             let mut builder = match BBFBuilder::new(&mut cursor) {
                 Ok(b) => b,
                 Err(err) => {
-                    set_status.set(format!("Error initializing builder: {:?}", err));
+                    set_status.set(format!("Error initializing builder: {err:?}"));
                     return;
                 }
             };
@@ -476,26 +476,25 @@ pub fn Builder() -> impl IntoView {
 
             for entry in current_entries {
                 match entry {
-                    BuilderEntry::File { file, name, .. } => match read_file_to_vec(&file).await {
-                        Ok(data) => {
+                    BuilderEntry::File { file, name, .. } => {
+                        if let Ok(data) = read_file_to_vec(&file).await {
                             let ext = std::path::Path::new(&name)
                                 .extension()
                                 .and_then(|e| e.to_str())
-                                .map(|e| format!(".{}", e))
+                                .map(|e| format!(".{e}"))
                                 .unwrap_or_default();
 
                             let media_type = BBFMediaType::from_extension(&ext);
                             if let Err(err) = builder.add_page(&data, media_type, 0) {
-                                set_status.set(format!("Error adding page: {:?}", err));
+                                set_status.set(format!("Error adding page: {err:?}"));
                                 return;
                             }
                             page_count += 1;
-                        }
-                        Err(_) => {
+                        } else {
                             set_status.set("Failed to read file".to_string());
                             return;
                         }
-                    },
+                    }
                     BuilderEntry::Section { name, .. } => {
                         builder.add_section(&name.get(), page_count, None);
                     }
@@ -507,7 +506,7 @@ pub fn Builder() -> impl IntoView {
             }
 
             if let Err(err) = builder.finalize() {
-                set_status.set(format!("Error finalizing: {:?}", err));
+                set_status.set(format!("Error finalizing: {err:?}"));
                 return;
             }
 
@@ -611,35 +610,35 @@ pub fn Builder() -> impl IntoView {
                                             <div class="flex-1 min-w-0">
                                             {move || {
                                                 if is_editing() {
-                                                    match e {
-                                                        BuilderEntry::Section { name, .. } => {
-                                                            view! {
-                                                                <input
-                                                                    type="text"
-                                                                    class=builder_css::INLINE_INPUT
-                                                                    prop:value=move || name.get()
-                                                                    autofocus
-                                                                    on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()
-                                                                    on:keydown=move |ev: KeyboardEvent| {
-                                                                        if ev.key() == "Enter" {
-                                                                            ev.prevent_default();
-                                                                            let val = event_target_value(&ev);
-                                                                            name.set(val);
-                                                                            set_editing_id.set(None);
-                                                                        } else if ev.key() == "Escape" {
-                                                                            set_editing_id.set(None);
-                                                                        }
+                                                    if let BuilderEntry::Section { name, .. } = e {
+                                                        view! {
+                                                            <input
+                                                                type="text"
+                                                                class=builder_css::INLINE_INPUT
+                                                                prop:value=move || name.get()
+                                                                autofocus
+                                                                on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()
+                                                                on:keydown=move |ev: KeyboardEvent| {
+                                                                    if ev.key() == "Enter" {
+                                                                        ev.prevent_default();
+                                                                        let val = event_target_value(&ev);
+                                                                        name.set(val);
+                                                                        set_editing_id.set(None);
+                                                                    } else if ev.key() == "Escape" {
+                                                                        set_editing_id.set(None);
                                                                     }
-                                                                    on:blur=move |_| set_editing_id.set(None)
-                                                                />
-                                                            }.into_any()
-                                                        },
-                                                        _ => view! {}.into_any()
+                                                                }
+                                                                on:blur=move |_| set_editing_id.set(None)
+                                                            />
+                                                        }.into_any()
+                                                    } else {
+                                                        let _: () = view! {};
+                                                        ().into_any()
                                                     }
                                                 } else {
                                                     let display_name = e.name();
                                                     view! {
-                                                        <span class=builder_css::ITEM_TEXT title=display_name.clone()>
+                                                        <span class=builder_css::ITEM_TEXT title=display_name>
                                                             {display_name.clone()}
                                                         </span>
                                                     }.into_any()

@@ -18,7 +18,7 @@ pub async fn read_file_to_vec(file: &File) -> Result<Vec<u8>, JsValue> {
         reader_c.set_onload(Some(onload.as_ref().unchecked_ref()));
         reader_c.set_onerror(Some(onerror.as_ref().unchecked_ref()));
 
-        if let Err(_) = reader_c.read_as_array_buffer(file) {
+        if reader_c.read_as_array_buffer(file).is_err() {
             let _ = reject.call0(&JsValue::NULL);
         }
 

@@ -178,7 +178,7 @@ pub fn Reader() -> impl IntoView {
             align-items: center;
             justify-content: center;
             overflow: auto;
-            padding: 1rem;
+            padding: 0.5rem;
             cursor: pointer;
         }
 
@@ -194,7 +194,7 @@ pub fn Reader() -> impl IntoView {
             background-color: #0f172a;
             border-top: 1px solid #334155;
             color: #e2e8f0;
-            padding: 0.75rem;
+            padding: 0.25rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -202,11 +202,11 @@ pub fn Reader() -> impl IntoView {
         }
 
         .nav-btn {
-            padding: 0.375rem 1rem;
+            padding: 0.25rem 0.60rem;
             background-color: #1e293b;
             border: 1px solid #475569;
             border-radius: 0.25rem;
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             color: inherit;
             cursor: pointer;
             transition: background-color 0.2s;

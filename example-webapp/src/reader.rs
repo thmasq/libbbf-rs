@@ -1,11 +1,12 @@
 use crate::utils::read_file_to_vec;
+use leptos::ev::{mousemove, mouseup};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_styling::inline_style_sheet;
 use libbbf::BBFReader;
 use std::sync::Arc;
 use wasm_bindgen::JsCast;
-use web_sys::{HtmlInputElement, Url, js_sys};
+use web_sys::{HtmlInputElement, MouseEvent, Url, js_sys};
 use xxhash_rust::xxh3::xxh3_64;
 
 #[derive(Clone)]
@@ -22,11 +23,13 @@ pub fn Reader() -> impl IntoView {
     let (img_url, set_img_url) = signal(String::new());
     let (status, set_status) = signal(String::new());
 
+    let (sidebar_width, set_sidebar_width) = signal(250);
+    let (is_resizing, set_is_resizing) = signal(false);
+
     inline_style_sheet! {
         reader_css,
         "reader",
 
-        /* Layout Containers */
         .container {
             height: 100%;
             display: flex;
@@ -40,55 +43,6 @@ pub fn Reader() -> impl IntoView {
             overflow: hidden;
         }
 
-        /* Top Bar */
-        .top-bar {
-            background-color: #0f172a; /* bg-slate-900 */
-            border-bottom: 1px solid #334155; /* border-slate-700 */
-            padding: 1rem;
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            z-index: 10;
-        }
-
-        .spacer { flex: 1; }
-
-        /* UI Components */
-        .upload-label {
-            background-color: #4f46e5; /* bg-indigo-600 */
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            cursor: pointer;
-            font-size: 0.875rem;
-            font-weight: 500;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            transition: background-color 0.2s;
-        }
-        .upload-label:hover { background-color: #6366f1; }
-
-        .status {
-            color: #a5b4fc; /* text-indigo-300 */
-            font-family: monospace;
-            font-size: 0.875rem;
-            border-left: 1px solid #334155;
-            padding-left: 1rem;
-        }
-
-        .verify-btn {
-            background-color: #1e293b; /* bg-slate-800 */
-            border: 1px solid rgba(245, 158, 11, 0.3); /* amber-500/30 */
-            color: #f59e0b; /* text-amber-500 */
-            padding: 0.25rem 0.75rem;
-            border-radius: 0.25rem;
-            font-size: 0.875rem;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .verify-btn:hover { background-color: rgba(120, 53, 15, 0.2); }
-
-        /* Empty State */
         .empty-state {
             display: flex;
             flex-direction: column;
@@ -96,22 +50,78 @@ pub fn Reader() -> impl IntoView {
             justify-content: center;
             height: 100%;
             color: #64748b; /* text-slate-500 */
+            cursor: pointer;
+            transition: all 0.2s;
         }
-        .empty-icon { font-size: 3.75rem; margin-bottom: 1rem; opacity: 0.2; }
-        .empty-text { font-size: 1.125rem; }
+        .empty-state:hover {
+            color: #94a3b8; /* text-slate-400 */
+            background-color: rgba(30, 41, 59, 0.5); /* bg-slate-800/50 */
+        }
+        .empty-icon { font-size: 3.75rem; margin-bottom: 1rem; opacity: 0.5; }
+        .empty-text { font-size: 1.125rem; font-weight: 500; }
 
-        /* Sidebar (Sections & Metadata) */
         .sidebar {
-            width: 16rem; /* w-64 */
             background-color: #0f172a; /* bg-slate-900 */
-            border-right: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
             overflow-y: auto;
-            display: none; /* hidden by default on mobile */
+            flex-shrink: 0;
+            display: none;
         }
 
-        /* Media query to show sidebar on md screens and up */
+        /* Resizer Handle */
+        .resizer {
+            width: 5px;
+            background-color: #1e293b; /* slate-800 */
+            cursor: col-resize;
+            flex-shrink: 0;
+            transition: background-color 0.2s;
+            display: none;
+            z-index: 10;
+        }
+        .resizer:hover {
+            background-color: #6366f1; /* indigo-500 */
+        }
+        .resizer-active {
+            background-color: #6366f1; /* indigo-500 */
+        }
+
         @media (min-width: 768px) {
             .sidebar { display: block; }
+            .resizer { display: block; }
+        }
+
+        .sidebar-controls {
+            padding: 1rem;
+            background-color: #1e293b;
+            border-bottom: 1px solid #334155;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        .sidebar-btn {
+            display: block;
+            text-align: center;
+            background-color: #4f46e5; /* bg-indigo-600 */
+            color: white;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.2s;
+            margin-bottom: 0.75rem;
+        }
+        .sidebar-btn:hover { background-color: #6366f1; }
+
+        .status {
+            color: #a5b4fc; /* text-indigo-300 */
+            font-family: monospace;
+            font-size: 0.75rem;
+            text-align: center;
+            word-break: break-all;
         }
 
         .sidebar-header {
@@ -120,8 +130,6 @@ pub fn Reader() -> impl IntoView {
             border-bottom: 1px solid #334155;
             font-weight: 700;
             color: #e2e8f0;
-            position: sticky;
-            top: 0;
         }
 
         .sidebar-header-meta {
@@ -133,7 +141,6 @@ pub fn Reader() -> impl IntoView {
         .sidebar-list { padding: 0.5rem; list-style: none; margin: 0; }
         .meta-list { padding: 1rem; list-style: none; margin: 0; font-size: 0.75rem; color: #94a3b8; }
 
-        /* Sidebar Items */
         .section-item {
             cursor: pointer;
             padding: 0.375rem 0.5rem;
@@ -143,10 +150,9 @@ pub fn Reader() -> impl IntoView {
         }
         .section-item:hover { background-color: #1e293b; }
 
-        /* Active State for Sections */
         .active {
             color: #818cf8; /* text-indigo-400 */
-            background-color: #1e293b; /* Keep hover bg */
+            background-color: #1e293b;
         }
 
         .section-title { font-weight: 500; font-size: 0.875rem; }
@@ -163,13 +169,13 @@ pub fn Reader() -> impl IntoView {
         .meta-key { color: #818cf8; font-weight: 700; }
         .meta-val { color: #cbd5e1; word-break: break-all; }
 
-        /* Image Viewer Area */
         .viewer-area {
             flex: 1;
             display: flex;
             flex-direction: column;
             background-color: black;
             position: relative;
+            overflow: hidden;
         }
 
         .image-container {
@@ -189,7 +195,6 @@ pub fn Reader() -> impl IntoView {
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
         }
 
-        /* Bottom Controls */
         .controls {
             background-color: #0f172a;
             border-top: 1px solid #334155;
@@ -217,25 +222,73 @@ pub fn Reader() -> impl IntoView {
         .page-number { color: white; font-weight: 700; }
     }
 
+    let start_resize = move |ev: MouseEvent| {
+        ev.prevent_default();
+        set_is_resizing.set(true);
+    };
+
+    let _ = window_event_listener(mousemove, move |ev: MouseEvent| {
+        if is_resizing.get() {
+            ev.prevent_default();
+            let new_width = ev.client_x();
+            let clamped = new_width.max(150).min(600);
+            set_sidebar_width.set(clamped);
+        }
+    });
+
+    let _ = window_event_listener(mouseup, move |_| {
+        set_is_resizing.set(false);
+    });
+
+    Effect::new(move |_| {
+        if let Some(body) = web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.body())
+        {
+            if is_resizing.get() {
+                let _ = body.style().set_property("cursor", "col-resize");
+            } else {
+                let _ = body.style().remove_property("cursor");
+            }
+        }
+    });
+
     let handle_file = move |ev: web_sys::Event| {
         let target: HtmlInputElement = ev.target().unwrap().unchecked_into();
         if let Some(files) = target.files() {
             if let Some(file) = files.get(0) {
                 let fname = file.name();
                 spawn_local(async move {
-                    set_status.set("Loading...".to_string());
+                    set_status.set("Loading & Verifying...".to_string());
                     match read_file_to_vec(&file).await {
                         Ok(vec) => {
                             let data_arc: Arc<[u8]> = Arc::from(vec);
 
                             match BBFReader::new(data_arc) {
                                 Ok(r) => {
+                                    let assets = r.assets();
+                                    let mut bad = 0;
+                                    for (i, asset) in assets.iter().enumerate() {
+                                        if let Ok(data) = r.get_asset(i as u32) {
+                                            if xxh3_64(data) != asset.xxh3_hash.get() {
+                                                bad += 1;
+                                            }
+                                        } else {
+                                            bad += 1;
+                                        }
+                                    }
+
+                                    if bad == 0 {
+                                        set_status.set("Integrity: OK".to_string());
+                                    } else {
+                                        set_status.set(format!("Integrity: {} CORRUPT", bad));
+                                    }
+
                                     set_book.set(Some(LoadedBook {
                                         name: fname,
                                         reader: Arc::new(r),
                                     }));
                                     set_page_idx.set(0);
-                                    set_status.set("Loaded.".to_string());
                                 }
                                 Err(e) => set_status.set(format!("Invalid BBF: {:?}", e)),
                             }
@@ -305,62 +358,28 @@ pub fn Reader() -> impl IntoView {
         }
     };
 
-    let verify_integrity = move |_| {
-        spawn_local(async move {
-            if let Some(bk) = book.get_untracked() {
-                set_status.set("Verifying...".to_string());
-                let reader = bk.reader;
-                let assets = reader.assets();
-                let mut bad = 0;
-                for (i, asset) in assets.iter().enumerate() {
-                    if let Ok(data) = reader.get_asset(i as u32) {
-                        let hash = xxh3_64(data);
-                        if hash != asset.xxh3_hash.get() {
-                            bad += 1;
-                        }
-                    } else {
-                        bad += 1;
-                    }
-                }
-                if bad == 0 {
-                    set_status.set("Integrity Check: OK".to_string());
-                } else {
-                    set_status.set(format!("Integrity Check: {} CORRUPT assets", bad));
-                }
-            }
-        });
-    };
-
     view! {
         <div class=reader_css::CONTAINER>
-            <div class=reader_css::TOP_BAR>
-                 <label class=reader_css::UPLOAD_LABEL>
-                    "Open .bbf"
-                    <input type="file" accept=".bbf" on:change=handle_file class="hidden" style="display:none" />
-                </label>
-
-                <span class=reader_css::STATUS>{status}</span>
-
-                <div class=reader_css::SPACER></div>
-
-                <Show when=move || book.get().is_some()>
-                      <button
-                        on:click=verify_integrity
-                        class=reader_css::VERIFY_BTN
-                    >
-                        "Verify Integrity"
-                    </button>
-                </Show>
-            </div>
-
-            <Show when=move || book.get().is_some() fallback=|| view! {
-                <div class=reader_css::EMPTY_STATE>
+            <Show when=move || book.get().is_some() fallback=move || view! {
+                <label class=reader_css::EMPTY_STATE>
                     <div class=reader_css::EMPTY_ICON>"📖"</div>
                     <div class=reader_css::EMPTY_TEXT>"Select a BBF file to begin reading."</div>
-                </div>
+                    <input type="file" accept=".bbf" on:change=handle_file class="hidden" style="display:none" />
+                </label>
             }>
                 <div class=reader_css::MAIN_CONTENT>
-                    <div class=reader_css::SIDEBAR>
+                    <div
+                        class=reader_css::SIDEBAR
+                        style=move || format!("width: {}px", sidebar_width.get())
+                    >
+                        <div class=reader_css::SIDEBAR_CONTROLS>
+                             <label class=reader_css::SIDEBAR_BTN>
+                                "Open New File"
+                                <input type="file" accept=".bbf" on:change=handle_file class="hidden" style="display:none" />
+                            </label>
+                            <div class=reader_css::STATUS>{move || status.get()}</div>
+                        </div>
+
                         <div class=reader_css::SIDEBAR_HEADER>"Sections"</div>
                         <ul class=reader_css::SIDEBAR_LIST>
                             {move || {
@@ -413,6 +432,15 @@ pub fn Reader() -> impl IntoView {
                             }}
                          </ul>
                     </div>
+
+                    <div
+                        class=move || if is_resizing.get() {
+                            format!("{} {}", reader_css::RESIZER, reader_css::RESIZER_ACTIVE)
+                        } else {
+                            reader_css::RESIZER.to_string()
+                        }
+                        on:mousedown=start_resize
+                    ></div>
 
                     <div class=reader_css::VIEWER_AREA>
                         <div

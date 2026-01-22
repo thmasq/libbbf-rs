@@ -11,6 +11,28 @@ permissions:
   id-token: write
 
 jobs:
+  generate-header:
+    name: Generate C Header
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cbindgen
+        run: cargo install --force cbindgen
+
+      - name: Generate Header
+        run: cbindgen --config cbindgen.toml --crate bbf --output bbf.h
+
+      - name: Upload Header Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bbf-header
+          path: bbf.h
+
   deploy-webapp:
     name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
@@ -50,30 +72,43 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-  build-binaries:
-    name: Build Binary (${{ matrix.target }})
+  build-artifacts:
+    name: Build (${{ matrix.target }})
+    needs: [generate-header]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Linux x86_64 (Musl)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            artifact_name: bbfmux
-            asset_name: bbfmux-linux-x86_64-musl
             use_cross: true
+            # Output names
+            bin_name: bbfmux
+            lib_name: libbbf.so
+            asset_bin: bbfmux-linux-x86_64-musl
+            asset_lib: libbbf-linux-x86_64-musl.so
 
+          # Linux aarch64 (Musl)
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
-            artifact_name: bbfmux
-            asset_name: bbfmux-linux-aarch64-musl
             use_cross: true
+            bin_name: bbfmux
+            lib_name: libbbf.so
+            asset_bin: bbfmux-linux-aarch64-musl
+            asset_lib: libbbf-linux-aarch64-musl.so
 
+          # Windows x86_64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: bbfmux.exe
-            asset_name: bbfmux-windows-x86_64.exe
             use_cross: false
+            bin_name: bbfmux.exe
+            lib_name: bbf.dll
+            import_lib: bbf.dll.lib
+            asset_bin: bbfmux-windows-x86_64.exe
+            asset_lib: bbf-windows-x86_64.dll
+            asset_import_lib: bbf-windows-x86_64.lib
 
     steps:
       - name: Checkout sources
@@ -88,24 +123,43 @@ jobs:
         if: matrix.use_cross
         run: cargo install cross
 
-      - name: Build Binary (Cross)
+      - name: Download Header
+        uses: actions/download-artifact@v4
+        with:
+          name: bbf-header
+          path: release-assets
+
+      - name: Build All (Cross)
         if: matrix.use_cross
-        run: cross build --release --bin bbfmux --target ${{ matrix.target }}
+        run: |
+          cross build --release --bin bbfmux --target ${{ matrix.target }}
+          cross build --release --lib -p bbf --target ${{ matrix.target }}
 
-      - name: Build Binary (Cargo)
+      - name: Build All (Cargo)
         if: ${{ !matrix.use_cross }}
-        run: cargo build --release --bin bbfmux --target ${{ matrix.target }}
+        run: |
+          cargo build --release --bin bbfmux --target ${{ matrix.target }}
+          cargo build --release --lib -p bbf --target ${{ matrix.target }}
 
-      - name: Prepare Asset Name
+      - name: Package Assets
         shell: bash
         run: |
           mkdir -p release-assets
-          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} release-assets/${{ matrix.asset_name }}
+          
+          cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} release-assets/${{ matrix.asset_bin }}
+          
+          # Copy Shared Library
+          cp target/${{ matrix.target }}/release/${{ matrix.lib_name }} release-assets/${{ matrix.asset_lib }}
+          
+          # Copy Windows Import Lib (Only if it exists)
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            cp target/${{ matrix.target }}/release/${{ matrix.import_lib }} release-assets/${{ matrix.asset_import_lib }}
+          fi
 
-      - name: Upload Release Asset
+      - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: release-assets/${{ matrix.asset_name }}
+          files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

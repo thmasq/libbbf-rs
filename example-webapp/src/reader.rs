@@ -121,7 +121,7 @@ pub fn Reader() -> impl IntoView {
             font-family: monospace;
             font-size: 0.75rem;
             text-align: center;
-            word-break: break-all;
+            word-break: break-word;
         }
 
         .sidebar-header {
@@ -167,7 +167,7 @@ pub fn Reader() -> impl IntoView {
         }
         .meta-item:last-child { border-bottom: none; }
         .meta-key { color: #818cf8; font-weight: 700; }
-        .meta-val { color: #cbd5e1; word-break: break-all; }
+        .meta-val { color: #cbd5e1; word-break: break-word; }
 
         .viewer-area {
             flex: 1;

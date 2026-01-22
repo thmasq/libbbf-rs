@@ -187,7 +187,6 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 name = "bbf"
 version = "0.1.1"
 dependencies = [
- "memmap2",
  "thiserror 2.0.18",
  "xxhash-rust",
  "zerocopy",

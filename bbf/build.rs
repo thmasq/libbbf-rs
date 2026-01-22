@@ -1,4 +1,4 @@
 fn main() {
     #[cfg(feature = "uniffi-bindings")]
-    uniffi::generate_scaffolding("src/bbf.udl").unwrap();
+    uniffi_build::generate_scaffolding("src/bbf.udl").unwrap();
 }

@@ -240,6 +240,7 @@ version = "0.1.1"
 dependencies = [
  "thiserror 2.0.18",
  "uniffi",
+ "uniffi_build",
  "xxhash-rust",
  "zerocopy",
 ]
@@ -2717,7 +2718,6 @@ dependencies = [
  "cargo_metadata",
  "clap",
  "uniffi_bindgen",
- "uniffi_build",
  "uniffi_core",
  "uniffi_macros",
  "uniffi_pipeline",

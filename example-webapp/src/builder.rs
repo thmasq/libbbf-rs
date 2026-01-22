@@ -342,15 +342,19 @@ pub fn Builder() -> impl IntoView {
         }
     }
 
-    let _ = window_event_listener(leptos::ev::mousemove, move |ev| {
+    let handle = window_event_listener(leptos::ev::mousemove, move |ev| {
         set_mouse_pos.set((ev.client_x() as f64, ev.client_y() as f64));
     });
 
-    let _ = window_event_listener(leptos::ev::click, move |_| {
+    on_cleanup(move || handle.remove());
+
+    let handle_click = window_event_listener(leptos::ev::click, move |_| {
         if floating_entry.get_untracked().is_some() {
             set_floating_entry.set(None);
         }
     });
+
+    on_cleanup(move || handle_click.remove());
 
     let handle_files = move |ev: web_sys::Event| {
         let target: HtmlInputElement = ev.target().unwrap().unchecked_into();

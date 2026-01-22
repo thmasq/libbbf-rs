@@ -227,7 +227,7 @@ pub fn Reader() -> impl IntoView {
         set_is_resizing.set(true);
     };
 
-    let _ = window_event_listener(mousemove, move |ev: MouseEvent| {
+    let handle = window_event_listener(mousemove, move |ev: MouseEvent| {
         if is_resizing.get() {
             ev.prevent_default();
             let new_width = ev.client_x();
@@ -236,9 +236,13 @@ pub fn Reader() -> impl IntoView {
         }
     });
 
-    let _ = window_event_listener(mouseup, move |_| {
+    on_cleanup(move || handle.remove());
+
+    let handle_up = window_event_listener(mouseup, move |_| {
         set_is_resizing.set(false);
     });
+
+    on_cleanup(move || handle_up.remove());
 
     Effect::new(move |_| {
         if let Some(body) = web_sys::window()

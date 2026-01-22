@@ -7,7 +7,19 @@ edition = "2024"
 name = "bbf"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+uniffi-bindings = ["dep:uniffi"]
+
 [dependencies]
 thiserror = "2.0.18"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 zerocopy = { version = "0.8.33", features = ["derive"] }
+uniffi = { version = "0.31", optional = true, features = ["cli"] }
+
+[build-dependencies]
+uniffi = { version = "0.31", features = ["build"] }
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/uniffi-bindgen.rs"
+required-features = ["uniffi-bindings"]

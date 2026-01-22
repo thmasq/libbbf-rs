@@ -1,0 +1,42 @@
+namespace bbf {
+};
+
+[Error]
+enum BbfError {
+    "Io",
+    "Parse",
+    "AlreadyFinalized",
+};
+
+enum MediaType {
+    "Unknown",
+    "Avif",
+    "Png",
+    "Webp",
+    "Jxl",
+    "Bmp",
+    "Gif",
+    "Tiff",
+    "Jpg"
+};
+
+interface BbfBuilder {
+    [Throws=BbfError]
+    constructor(string path);
+
+    [Throws=BbfError]
+    u32 add_page(bytes data, MediaType media_type, u32 flags);
+
+    [Throws=BbfError]
+    void finalize();
+};
+
+interface BbfReader {
+    [Throws=BbfError]
+    constructor(bytes data);
+
+    u32 get_page_count();
+
+    [Throws=BbfError]
+    sequence<u8> get_page(u32 page_index);
+};
